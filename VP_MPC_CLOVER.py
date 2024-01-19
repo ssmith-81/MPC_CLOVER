@@ -3,6 +3,9 @@ from acados_template import AcadosOcp, AcadosOcpSolver, AcadosSimSolver
 from CLOVER_MODEL import export_clover_model
 import numpy as np
 import scipy.linalg
+from casadi import SX, vertcat, sin, cos, norm_2, diag, sqrt 
+
+
 
 
 X0 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) # Initialize the states [x,xdot,y,ydot,z,zdot]
@@ -32,8 +35,8 @@ def create_ocp_solver_description():
 
 
     # Set the Cost (built in cost function):
-    # ocp.cost.cost_type = "NONLINEAR_LS"  # LINEAR_LS  --> Cost type at intermediate shootig nodes (1 to N-1): Default LINEAR_LS
-    # ocp.cost.cost_type_0 = "NONLINEAR_LS" # Cost type at initial shoting node (0): would be the same as intermediate shooting nodes if not set explicitly
+    # ocp.cost.cost_type = "NONLINEAR_LS"  # LINEAR_LS  --> Cost type at intermediate shooting nodes (1 to N-1): Default LINEAR_LS
+    # ocp.cost.cost_type_0 = "NONLINEAR_LS" # Cost type at initial shooting node (0): would be the same as intermediate shooting nodes if not set explicitly
     # # Therefore did not need to set the type_0 if it was the same
     # ocp.cost.cost_type_e = "NONLINEAR_LS" # Cost type at terminal shooting node (N): Default LINEAR_LS
 
@@ -43,8 +46,21 @@ def create_ocp_solver_description():
     ocp.cost.cost_type = "EXTERNAL"
     ocp.cost.cost_type_e = "EXTERNAL"
 
-    ocp.cost_expr_ext_cost = CloverCost(x,u,refTrajectory)
-    ocp.cost_expr_ext_cost_e = 
+    # Dont need to explicitly define these as they are defulated to 'casadi':
+    # ocp.cost.cost_ext_fun_type = 'casadi'
+    # ocp.cost.cost_ext_fun_type_e = 'casadi'
+
+    # Define cost/weight matrices
+    Q_c = 
+    ocp.cost_expr_ext_cost =  CloverCost(ocp)  # Experssion for external cost
+    # ocp.cost_expr_ext_cost_e =  CloverCost_e(ocp)  # Terminal shooting point cost
+
+
+    # ocp.cost_expr_ext_cost =  CloverCost(ocp)  # Experssion for external cost
+    # ocp.cost_expr_ext_cost_e =  CloverCost_e(ocp)  # Terminal shooting point cost
+
+    
+
 
     # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpConstraints
     # constraints u = [ux,uy,uz] -> acceleration commands
@@ -88,9 +104,11 @@ def generate_ref():
     y_values = np.interp(t, [0, 10], [initial_point[1], final_point[1]])
     z_values = np.ones_like(t)
 
+    ref_trajectory = np.column_stack((x_values, y_values, z_values))
+
     # todo: Using the VP velocity field...
 
-    # todo: fgure out if T_horizon is the actualy total sampling time of controller
+    # todo: figure out if T_horizon is the actualy total sampling time of controller
 
 
 def main():
@@ -110,6 +128,41 @@ def main():
     nu = ocp.model.u.size()[0] # Number of control inputs
 
     # Arrays to store the results (chatgpt)
-    simX = np.ndarray((Nsim, nx))  # xHistory   or np.ndarray((Nsim+1,nx))??
-    simU = np.ndarray((Nsim - 1, nu))     # uHistory  or np.ndarray((Nsim, nu))??
+    # simX = np.ndarray((Nsim, nx))  # xHistory   or np.ndarray((Nsim+1,nx))??
+    # simU = np.ndarray((Nsim - 1, nu))     # uHistory  or np.ndarray((Nsim, nu))??
+    simX = np.ndarray((Nsim + 1, nx))  # xHistory   or np.ndarray((Nsim+1,nx))??
+    simU = np.ndarray((Nsim, nu))     # uHistory  or np.ndarray((Nsim, nu))??
 
+    timings = np.zeros((Nsim,))
+
+    x_current = X0
+    simX[0,:] = x_current # Set the initial state
+
+    # Closed loop simulation
+
+    for i in range(Nsim):
+
+        # Solve ocp
+        acados_ocp_solver(0, 'lbx', x_current)
+        acados_ocp_solver(0, 'ubx', x_current)
+
+        status = acados_ocp_solver.solve()
+        timings[i] = acados_ocp_solver.get_status("time_tot")
+
+        if status != 0:
+            raise Exception('acados acados_ocp_solver returned status {} in time step {}. Exiting.'.format(status, i))
+
+        simU[i,:] = acados_ocp_solver.get(0, "u")
+        print("control at time", i, ":", simU[i,:])
+
+        # simulate system
+        acados_integrator.set("x", x_current)
+        acados_integrator.set("u", simU[i,:])
+
+        status = acados_integrator.solve()
+        if status != 0:
+            raise Exception('acados integrator returned status {}. Exiting.'.format(status))
+
+         # update state
+        x_current = acados_integrator.get("x")
+        simX[i+1,:] = x_current
