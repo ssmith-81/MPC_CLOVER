@@ -1,8 +1,102 @@
 import acados
+from CLOVER_MODEL import export_clover_model
+from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 from casadi import vertcat, sum1, mtimes, Function
+import numpy as np
+import scipy.linalg
 
 
 
+def acados_settings(N_horizon, T_horizon):
+
+    # optimal control problem
+        # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcp
+		ocp = AcadosOcp()
+
+        # https://docs.acados.org/python_interface/index.html#acados_template.acados_model.AcadosModel
+		model = export_clover_model()
+		ocp.model = model
+		x = model.x
+		u = model.u
+		# Dimensions
+		nx = model.x.size()[0]  # number of states.
+		nu = model.u.size()[0]  # number of inputs.
+		ny = nx + nu # y is x and u concatenated for compactness of the loss function
+		ny_e = nx # u is not a decision variable for the final in the prediction horizon
+
+        # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpDims
+		ocp.dims.N = N_horizon # prediction horizon, other fields in dim are set automatically
+
+
+        # Set the Cost (built in cost function):
+		ocp.cost.cost_type = "NONLINEAR_LS"  # LINEAR_LS  --> Cost type at intermediate shooting nodes (1 to N-1): Default LINEAR_LS
+        # ocp.cost.cost_type_0 = "NONLINEAR_LS" # Cost type at initial shooting node (0): would be the same as intermediate shooting nodes if not set explicitly
+        # # Therefore did not need to set the type_0 if it was the same
+		ocp.cost.cost_type_e = "NONLINEAR_LS" # Cost type at terminal shooting node (N): Default LINEAR_LS
+		# Cost matrices
+		Q = np.diag([ 10, 0, 10, 0, 10, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
+		R = np.eye(nu) # Three control inputs acceleration
+		R[0, 0] = 1e-4
+		R[1, 1] = 1e-4
+		R[2, 2] = 1e-4
+
+		ocp.cost.W_e = Q  # inputs are not decision variables at the end of prediction horizon
+		ocp.cost.W = scipy.linalg.block_diag(Q, R) # acados combines states and control input to yref for compactness
+
+        # Set the cost (Custom cost function):
+        # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpCost
+        # self.ocp.cost.cost_type = "EXTERNAL"
+        # self.ocp.cost.cost_type_e = "EXTERNAL"
+
+        # Dont need to explicitly define these as they are defulated to 'casadi':
+        # ocp.cost.cost_ext_fun_type = 'casadi'
+        # ocp.cost.cost_ext_fun_type_e = 'casadi'
+
+        # Define cost/weight matrices
+        # Q_c = 
+        # self.ocp.cost_expr_ext_cost =  CloverCost(self.ocp)  # Experssion for external cost
+        # ocp.cost_expr_ext_cost_e =  CloverCost_e(ocp)  # Terminal shooting point cost
+
+
+        # ocp.cost_expr_ext_cost =  CloverCost(ocp)  # Experssion for external cost
+        # ocp.cost_expr_ext_cost_e =  CloverCost_e(ocp)  # Terminal shooting point cost
+
+		# Set the reference trajectory (this will be overwritten later, just for dimensions right now)
+		ocp.cost.yref = np.zeros((ny,)) # wont matter what we apply for refs for states with 0 weighting in Q above
+		ocp.cost.yref_e = np.zeros((ny_e,))
+
+		ocp.constraints.x0 = np.zeros(nx) # initial state (not sure) ranslated internally to idxbx_0, lbx_0, ubx_0, idxbxe_0
+
+
+        # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpConstraints
+        # constraints u = [ux,uy,uz] -> acceleration commands
+		u_lb = np.array([-10, -10, -10])
+		u_ub = np.array([10, 10, 10])
+
+		ocp.constraints.constr_type = 'BGH'  # BGP is for convex over nonlinear.
+		ocp.constraints.lbu = u_lb
+		ocp.constraints.ubu = u_ub
+        # ocp.constraints.idxbu = np.array([0, 1, 2]) # Constraints apply to u[0],u[1],u[2]
+        # Nonlinear in equality constraints
+        # ocp.constraints.lh = h_lb
+        # ocp.constraints.uh = h_ub
+        # ocp.constraints.lh_e = h_lb
+        # ocp.constraints.uh_e = h_ub
+
+        # Solver options
+        # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp_options.AcadosOcpOptions
+    
+        # solver_options.Tsim is time horizon for one integrator step. Automatically as tf/N. Deafault: None
+		ocp.solver_options.tf = T_horizon
+		ocp.solver_options.integrator_type = 'ERK' # ERK explicit numerical integration based on Runge-Kutta scheme, suitable for simple dynamics and fast sampling times
+        # IRK implicit numerical integration based on runge-kutta scheme, suitable for complex dynamics
+		ocp.solver_options.nlp_solver_type = 'SQP_RTI'
+        # SQP - sequential quadratic programming method, simple linear problems
+        # SQP_RTI extension of SQP to real time applications, aims to reduce computational time
+		ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM' # FULL_CONDENSING_QPOASES
+
+
+		return ocp
 
 def CloverCost(ocp):
 
@@ -11,6 +105,7 @@ def CloverCost(ocp):
 	u = ocp.u
 	N = ocp.dims.N  # Prediction horizon i.e. number of shooting nodes
 	
+	ref = ocp.cost.yref
 	
 	# State and input weight matrices
 	
