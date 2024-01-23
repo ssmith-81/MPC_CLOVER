@@ -1,6 +1,6 @@
 import acados
 from CLOVER_MODEL import export_clover_model
-from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
+from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver, AcadosSimSolver
 from casadi import vertcat, sum1, mtimes, Function
 import numpy as np
 import scipy.linalg
@@ -29,19 +29,25 @@ def acados_settings(N_horizon, T_horizon):
 
 
         # Set the Cost (built in cost function):
-		ocp.cost.cost_type = "NONLINEAR_LS"  # LINEAR_LS  --> Cost type at intermediate shooting nodes (1 to N-1): Default LINEAR_LS
+		ocp.cost.cost_type = "LINEAR_LS"  # NONLINEAR_LS  --> Cost type at intermediate shooting nodes (1 to N-1): Default LINEAR_LS
         # ocp.cost.cost_type_0 = "NONLINEAR_LS" # Cost type at initial shooting node (0): would be the same as intermediate shooting nodes if not set explicitly
         # # Therefore did not need to set the type_0 if it was the same
-		ocp.cost.cost_type_e = "NONLINEAR_LS" # Cost type at terminal shooting node (N): Default LINEAR_LS
-		# Cost matrices
-		Q = np.diag([ 10, 0, 10, 0, 10, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
-		R = np.eye(nu) # Three control inputs acceleration
-		R[0, 0] = 1e-4
-		R[1, 1] = 1e-4
-		R[2, 2] = 1e-4
+		ocp.cost.cost_type_e = "LINEAR_LS" # Cost type at terminal shooting node (N): Default LINEAR_LS
+		# Optimization costs
+		ocp.cost.Vx = np.zeros((ny, nx)) # raise the dim of x to the dim of y
+		ocp.cost.Vx[:nx, :nx] = np.eye(nx)  # Weight only x (zeros in Q will remove some of these)
+		ocp.cost.Vx_e = np.eye(nx) # enx x cost
 
-		ocp.cost.W_e = Q  # inputs are not decision variables at the end of prediction horizon
-		ocp.cost.W = scipy.linalg.block_diag(Q, R) # acados combines states and control input to yref for compactness
+		ocp.cost.Vu = np.zeros((ny, nu)) # raise dim of u to the dim of y
+		ocp.cost.Vu[-nu:, -nu:] = np.eye(nu) # weight only u
+
+		# Cost matrices
+		Q = np.array([ 10, 0, 10, 0, 10, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
+		R = np.array([ 1e-4, 1e-4, 1e-4]) # Three control inputs acceleration
+		
+
+		ocp.cost.W_e = np.diag(Q)  # inputs are not decision variables at the end of prediction horizon
+		ocp.cost.W = np.diag(np.concatenate((Q,R))) # acados combines states and control input to yref for compactness
 
         # Set the cost (Custom cost function):
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpCost
@@ -62,10 +68,12 @@ def acados_settings(N_horizon, T_horizon):
         # ocp.cost_expr_ext_cost_e =  CloverCost_e(ocp)  # Terminal shooting point cost
 
 		# Set the reference trajectory (this will be overwritten later, just for dimensions right now)
-		ocp.cost.yref = np.zeros((ny,)) # wont matter what we apply for refs for states with 0 weighting in Q above
-		ocp.cost.yref_e = np.zeros((ny_e,))
+		x_ref = np.zeros(nx)
+		ocp.cost.yref = np.concatenate((x_ref,np.array([0.0, 0.0, 0.0]))) # wont matter what we apply for refs for states with 0 weighting in Q above
+		# yref is of length ny, and we are sedinging zeros for yref corresponding to control inputs ux,uy,uz
+		ocp.cost.yref_e = np.zeros((ny_e,)) # end node reference (doesnt include control inputs of course)
 
-		ocp.constraints.x0 = np.zeros(nx) # initial state (not sure) ranslated internally to idxbx_0, lbx_0, ubx_0, idxbxe_0
+		ocp.constraints.x0 = np.zeros(nx) # initial state (not sure) translated internally to idxbx_0, lbx_0, ubx_0, idxbxe_0
 
 
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpConstraints
@@ -95,8 +103,12 @@ def acados_settings(N_horizon, T_horizon):
         # SQP_RTI extension of SQP to real time applications, aims to reduce computational time
 		ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM' # FULL_CONDENSING_QPOASES
 
+		 # Create solvers
+        
+		acados_solver = AcadosOcpSolver(ocp, json_file="acados_ocp_" + ocp.model.name + ".json")
+		acados_integrator = AcadosSimSolver(ocp, json_file="acados_ocp_" + ocp.model.name + ".json")
 
-		return ocp
+		return acados_solver, acados_integrator, model
 
 def CloverCost(ocp):
 
