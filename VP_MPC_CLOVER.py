@@ -6,6 +6,13 @@ from FUNCTIONS import CloverCost, acados_settings
 import numpy as np
 import scipy.linalg
 from casadi import SX, vertcat, sin, cos, norm_2, diag, sqrt 
+import matplotlib.pyplot as plt
+
+# Global lof variables
+X = []
+VX = []
+Y = []
+U = []
 
 
 
@@ -34,7 +41,7 @@ class clover:
         nx = model.x.size()[0]
         nu = model.u.size()[0]
         ny = nx + nu
-        Nsim = int(self.T_horizon * self.N_horizon / self.Time)
+        Nsim = int(self.Time * self.N_horizon / self.T_horizon)
 
         # Arrays to store the results (chatgpt)
         # simX = np.ndarray((Nsim, nx))  # xHistory   or np.ndarray((Nsim+1,nx))??
@@ -54,13 +61,19 @@ class clover:
         # Set the reference trajectory for the cost function
         #self.ocp = self.generate_ref(self.N_sim)
 
+        # # initialize solver
+        # for stage in range(N_horizon + 1):
+        #     acados_solver.set(stage, "x", 0.0 * np.ones(x_current.shape))
+        # for stage in range(N_horizon):
+        #     acados_solver.set(stage, "u", np.zeros((nu,)))
+
         # Closed loop simulation
 
         for i in range(Nsim):
 
             # set initial state constraint
-            acados_solver(0, 'lbx', x_current)
-            acados_solver(0, 'ubx', x_current)
+            acados_solver.set(0, 'lbx', x_current)
+            acados_solver.set(0, 'ubx', x_current)
 
             # update reference
             for j in range(self.N_horizon):
@@ -71,11 +84,23 @@ class clover:
             # yref_N=np.array([0,0,0,0,0,0])
             acados_solver.set(self.N_horizon, "yref", yref_N)
 
+            # Solve ocp
             status = acados_solver.solve()
-            timings[i] = acados_solver.get_status("time_tot")
+            # timings[i] = acados_solver.get_status("time_tot")
 
-            if status != 0:
-                raise Exception('acados acados_ocp_solver returned status {} in time step {}. Exiting.'.format(status, i))
+            if status not in [0, 2]:
+                acados_solver.print_statistics()
+                raise Exception(
+                    f"acados acados_ocp_solver returned status {status} in closed loop instance {i} with {xcurrent}"
+                )
+
+            if status == 2:
+                print(
+                    f"acados acados_ocp_solver returned status {status} in closed loop instance {i} with {xcurrent}"
+                )
+
+            # if status != 0:
+            #     raise Exception('acados acados_ocp_solver returned status {} in time step {}. Exiting.'.format(status, i))
 
             simU[i,:] = acados_solver.get(0, "u")
             print("control at time", i, ":", simU[i,:])
@@ -86,21 +111,63 @@ class clover:
 
             status = acados_integrator.solve()
             if status != 0:
-                raise Exception('acados integrator returned status {}. Exiting.'.format(status))
+                raise Exception(
+                    f"acados integrator returned status {status} in closed loop instance {i}"
+                )
+
+            
+			# logging/debugging
+            X.append(x_current[0])
+            VX.append(x_current[1])
+            Y.append(x_current[2])
+            U.append(simU[i,0])
 
             # update state
             x_current = acados_integrator.get("x")
             simX[i+1,:] = x_current
 
 if __name__ == '__main__':
-	try:
+    try:
 		# Define the performance parameters here which starts the script
-		q=clover(N_horizon = 10, T_horizon = 1.0/50, Time = 10.00)
+        N_horizon = 10
+        T_horizon = 1.0/50
+        Time = 10.00
+        q=clover(N_horizon = N_horizon, T_horizon = T_horizon, Time = Time)
 		
-		q.main()
+        q.main()
 		#print(xa)
 		#print(xf)
+        
+          
+        # Plot logged data for analyses and debugging
+        Nsim = int(Time * N_horizon / T_horizon)
+        t = np.linspace(0.0, Nsim * T_horizon / N_horizon, Nsim)
+        plt.figure(1)
+        plt.subplot(311)
+        plt.plot(t, X,'r')
+        #plt.legend()
+        plt.grid(True)
+		#plt.subplot(312)
+		#plt.plot(yf,'r',label='y-fol')
+		#plt.plot(ya,'b--',label='y-obs')
+		#plt.legend()
+		#plt.grid(True)
+		#plt.ylabel('Position [m]')
+        plt.subplot(312)
+        plt.plot(t, Y,'r')
+        plt.grid(True)
+        plt.subplot(313)
+        plt.plot(t, VX,'r')
+        plt.grid(True)
+
+        plt.figure(2)
+        plt.plot(t, U,'r')
+        plt.legend()
+        plt.grid(True)
+        plt.ylabel('yaw [deg]')
+        plt.xlabel('Time [s]')
+        plt.show()
 	
 		
-	except rospy.ROSInterruptException:
-		pass
+    except rospy.ROSInterruptException:
+        pass
