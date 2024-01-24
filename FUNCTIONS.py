@@ -1,4 +1,3 @@
-import acados
 from CLOVER_MODEL import export_clover_model
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver, AcadosSimSolver
 from casadi import vertcat, sum1, mtimes, Function
@@ -42,8 +41,10 @@ def acados_settings(N_horizon, T_horizon):
 		ocp.cost.Vu[-nu:, -nu:] = np.eye(nu) # weight only u
 
 		# Cost matrices
-		Q = np.array([ 10, 0, 10, 0, 10, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
-		R = np.array([ 1e-4, 1e-4, 1e-4]) # Three control inputs acceleration
+		# Q = np.array([ 10, 0, 10, 0, 10, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
+		# R = np.array([ 1e-4, 1e-4, 1e-4]) # Three control inputs acceleration
+		Q = np.array([ 1000, 0, 1500, 0, 1500, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
+		R = np.array([ 1e-5, 1e-1, 1e-1])
 		
 
 		ocp.cost.W_e = np.diag(Q)  # inputs are not decision variables at the end of prediction horizon
@@ -68,23 +69,23 @@ def acados_settings(N_horizon, T_horizon):
         # ocp.cost_expr_ext_cost_e =  CloverCost_e(ocp)  # Terminal shooting point cost
 
 		# Set the reference trajectory (this will be overwritten later, just for dimensions right now)
-		x_ref = np.zeros(nx)
+		x_ref = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 		ocp.cost.yref = np.concatenate((x_ref,np.array([0.0, 0.0, 0.0]))) # wont matter what we apply for refs for states with 0 weighting in Q above
 		# yref is of length ny, and we are sedinging zeros for yref corresponding to control inputs ux,uy,uz
 		ocp.cost.yref_e = np.zeros((ny_e,)) # end node reference (doesnt include control inputs of course)
 
-		ocp.constraints.x0 = np.zeros(nx) # initial state (not sure) translated internally to idxbx_0, lbx_0, ubx_0, idxbxe_0
+		ocp.constraints.x0 = x_ref # initial state (not sure) translated internally to idxbx_0, lbx_0, ubx_0, idxbxe_0
 
 
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpConstraints
         # constraints u = [ux,uy,uz] -> acceleration commands
-		u_lb = np.array([-10, -10, -10])
-		u_ub = np.array([10, 10, 10])
+		u_lb = np.array([-1000, -10, -10])
+		u_ub = np.array([1000, 10, 10])
 
 		ocp.constraints.constr_type = 'BGH'  # BGP is for convex over nonlinear.
 		ocp.constraints.lbu = u_lb
 		ocp.constraints.ubu = u_ub
-        # ocp.constraints.idxbu = np.array([0, 1, 2]) # Constraints apply to u[0],u[1],u[2]
+		ocp.constraints.idxbu = np.array([0, 1, 2]) # Constraints apply to u[0],u[1],u[2]
         # Nonlinear in equality constraints
         # ocp.constraints.lh = h_lb
         # ocp.constraints.uh = h_ub
