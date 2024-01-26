@@ -6,14 +6,14 @@ import scipy.linalg
 
 
 
-def acados_settings(N_horizon, T_horizon):
+def acados_settings(N_horizon, T_horizon, mass, J):
 
     # optimal control problem
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcp
 		ocp = AcadosOcp()
 
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_model.AcadosModel
-		model = export_clover_model()
+		model = export_clover_model(mass, J)
 		ocp.model = model
 		x = model.x
 		u = model.u
@@ -41,13 +41,15 @@ def acados_settings(N_horizon, T_horizon):
 		ocp.cost.Vu[-nu:, -nu:] = np.eye(nu) # weight only u
 
 		# Cost matrices
-		# State = [x, y, z, q_0, q_1, q_2 , x_dot, y_dot, z_dot, p_dot, q_dot, r_dot] p-phi, q-theta, r-psi
+		# State = [x, y, z, q_0, q_1, q_2, q_3 , x_dot, y_dot, z_dot, p_dot, q_dot, r_dot] p-phi, q-theta, r-psi
 
 		# Q = np.array([ 10, 0, 10, 0, 10, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
 		# R = np.array([ 1e-4, 1e-4, 1e-4]) # Three control inputs acceleration
 		#Q = np.array([ 1000, 0, 1500, 0, 1500, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
-		Q = np.array([ 80, 10, 80, 10, 50, 10, 0, 0, 0]) 
-		R = np.array([ 5, 5, 5])
+		#Q = np.array([ 80, 10, 80, 10, 0, 0, 10, 10, 10, 10, 0, 0, 0]) 
+		#Q = np.array([ 700, 700, 1500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) # position
+		Q = np.array([ 0, 0, 0, 80, 80, 80, 0, 0, 0, 0, 0, 0, 0])
+		R = np.array([ 2, 2, 2, 2])
 		
 
 		ocp.cost.W_e = np.diag(Q)  # inputs are not decision variables at the end of prediction horizon
@@ -72,9 +74,9 @@ def acados_settings(N_horizon, T_horizon):
         # ocp.cost_expr_ext_cost_e =  CloverCost_e(ocp)  # Terminal shooting point cost
 
 		# Set the reference trajectory (this will be overwritten later, just for dimensions right now)
-		x_ref = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-		ocp.cost.yref = np.concatenate((x_ref,np.array([0.0, 0.0, 0.0]))) # wont matter what we apply for refs for states with 0 weighting in Q above
-		# yref is of length ny, and we are sedinging zeros for yref corresponding to control inputs ux,uy,uz
+		x_ref = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		ocp.cost.yref = np.concatenate((x_ref,np.array([0.0, 0.0, 0.0, 0.0]))) # wont matter what we apply for refs for states with 0 weighting in Q above
+		# yref is of length ny, and we are sendinging zeros for yref corresponding to control inputs ux,uy,uz
 		ocp.cost.yref_e = np.zeros((ny_e,)) # end node reference (doesnt include control inputs of course)
 
 		ocp.constraints.x0 = x_ref # initial state (not sure) translated internally to idxbx_0, lbx_0, ubx_0, idxbxe_0
@@ -82,13 +84,16 @@ def acados_settings(N_horizon, T_horizon):
 
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpConstraints
         # constraints u = [ux,uy,uz] -> acceleration commands
-		u_lb = np.array([-10, -10, -10])
-		u_ub = np.array([10, 10, 10])
+		u_lb = np.array([-10, -10, -10, 0])
+		u_ub = np.array([10, 10, 10, 41])
+
+		# u_lb = np.array([0, 0, 0, 0])
+		# u_ub = np.array([1, 1, 1, 1])
 
 		ocp.constraints.constr_type = 'BGH'  # BGP is for convex over nonlinear.
 		ocp.constraints.lbu = u_lb
 		ocp.constraints.ubu = u_ub
-		ocp.constraints.idxbu = np.array([0, 1, 2]) # Constraints apply to u[0],u[1],u[2]
+		ocp.constraints.idxbu = np.array([0, 1, 2, 3]) # Constraints apply to u[0],u[1],u[2], u[3]
         # Nonlinear in equality constraints
         # ocp.constraints.lh = h_lb
         # ocp.constraints.uh = h_ub
