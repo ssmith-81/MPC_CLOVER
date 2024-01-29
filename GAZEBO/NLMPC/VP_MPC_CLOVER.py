@@ -92,9 +92,9 @@ class clover:
             for j in range(self.N_horizon):
                # State = [x, y, z, q_0, q_1, q_2, q_3 , x_dot, y_dot, z_dot, p_dot, q_dot, r_dot]
                 #yref=np.array([1,0,1,0,1,0,0,0,0]) # Set a constant reference of 1 for each position for now
-                yref=np.array([1.0, 1.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) # Constant position
+                yref=np.array([1.0, 1.0, 1.0, 0, 0, 0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) # Constant position
                 acados_solver.set(j, "yref", yref)
-            yref_N = np.array([1.0, 1.0, 1.0, 0.5, 0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) # Terminal position reference
+            yref_N = np.array([1.0, 1.0, 1.0, 0, 0, 0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0.0]) # Terminal position reference
             #yref_N = np.array([0,0.5,0,0.5,0,0.2]) # terminal velocity constraint
             # yref_N=np.array([0,0,0,0,0,0])
             acados_solver.set(self.N_horizon, "yref", yref_N)
@@ -148,7 +148,7 @@ class clover:
             X.append(simX[i,0])
             VX.append(simX[i,7])
             Y.append(simX[i,1])
-            U.append(simU[i,3])
+            U.append(simU[i,1])
             Z.append(simX[i,2])
             VZ.append(simX[i,9])
 
@@ -206,6 +206,12 @@ if __name__ == '__main__':
         plt.subplot(313)
         plt.plot(t, VZ,'r')
         plt.ylabel('VZ [m/s]')
+        plt.grid(True)
+
+        plt.figure(3)
+        plt.plot(X,Y,'b')
+        plt.ylabel('Y [m]')
+        plt.xlabel('X [m]')
         plt.grid(True)
         plt.show()
 	
