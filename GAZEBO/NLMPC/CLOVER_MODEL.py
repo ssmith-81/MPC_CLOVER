@@ -39,12 +39,16 @@ def export_clover_model(mass,J):
 	g = vertcat(0,0,9.81)
 	f_v = v_dot_q(a_thrust,q) - g
 
+	# f_r = vertcat(u1/J[0] + (J[1] - J[2])*r[1]*r[2]/J[0], u2/J[1] + (J[2] - J[0])*r[0]*r[2]/J[1],
+	# u3/J[2] + (J[0] - J[1])*r[0]*r[1]/J[2]) # Providing torque inputs, this works well with Q -> 400 R->2
+
 	# Angular rate dynamics ( set it up as angular rate control inputs, because 
 	# with ROS1, or MAVROS, we can only send angular rate setpoints and thrust in
 	# we can't send torque setpoints...)
-
 	f_r = vertcat(u1 + (J[1] - J[2])*r[1]*r[2]/J[0], u2 + (J[2] - J[0])*r[0]*r[2]/J[1],
-	u3 + (J[0] - J[1])*r[0]*r[1]/J[2])
+	u3 + (J[0] - J[1])*r[0]*r[1]/J[2]) # providing angular rate inputs (trque normalized by inertia) works well with Q->900 R->1e-6
+
+	
 
 	# Concated dynamics
 	f_dyn = vertcat(f_p, f_q, f_v, f_r)
