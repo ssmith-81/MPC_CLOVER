@@ -44,8 +44,8 @@ def acados_settings(N_horizon, T_horizon):
 		# Q = np.array([ 10, 0, 10, 0, 10, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
 		# R = np.array([ 1e-4, 1e-4, 1e-4]) # Three control inputs acceleration
 		#Q = np.array([ 1000, 0, 1500, 0, 1500, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
-		Q = np.array([ 80, 10, 80, 10, 50, 10])
-		R = np.array([ 5, 5, 5])
+		Q = np.array([ 100, 50, 100, 50, 50, 20]) # 50-80
+		R = np.array([ 5, 5, 5]) # 5 is goot
 		
 
 		ocp.cost.W_e = np.diag(Q)  # inputs are not decision variables at the end of prediction horizon
@@ -87,11 +87,38 @@ def acados_settings(N_horizon, T_horizon):
 		ocp.constraints.lbu = u_lb
 		ocp.constraints.ubu = u_ub
 		ocp.constraints.idxbu = np.array([0, 1, 2]) # Constraints apply to u[0],u[1],u[2]
-        # Nonlinear in equality constraints
-        # ocp.constraints.lh = h_lb
-        # ocp.constraints.uh = h_ub
-        # ocp.constraints.lh_e = h_lb
-        # ocp.constraints.uh_e = h_ub
+        # Nonlinear inequality constraints using CBF
+		# gamma = 0.1
+		# x_obs = 2
+		# y_obs = 2
+		# r_obs = 1.0
+		# ocp.model.con_h_expr = 2*((model.x[0] - x_obs)*model.x[7] + (model.x[1]-y_obs)*model.x[8])  - gamma*((model.x[0]-x_obs)**2 + (model.x[1]-y_obs)**2 - r_obs**2)
+		# # ocp.model.con_h_expr = ((model.x[0]-x_obs)**2 + (model.x[1]-y_obs)**2 - r_obs**2) # Hard constraint avoidance
+		# h_lb = np.array([0])
+		# h_ub = np.array([10000])
+		# ocp.constraints.lh = h_lb
+		# ocp.constraints.uh = h_ub
+		# # Usage of slack variables to relax the above hard constraints
+		# ocp.constraints.Jsh = np.eye(1)
+		# # slacks
+		# L2_pen = 1e3 # 1e3
+		# L1_pen = 1  #1
+
+		# ocp.cost.Zl = L2_pen*np.ones((1,)) # Diagonal of hessian WRT lower slack
+		# ocp.cost.Zu = L2_pen*np.ones((1,))
+		# ocp.cost.zl = L1_pen*np.ones((1,)) # Gradient with rspect to lower slack at intermediate shooting nodes
+		# ocp.cost.zu = L1_pen*np.ones((1,))
+		# ocp.constraints.lh_e = h_lb
+		# ocp.constraints.uh_e = h_ub
+
+		# Gradient indicates how changes in slack variables influence cost function. Higher gradient value implies stronger influence of the slack variables
+		# on the cost. It determines rate of change of the cost wrt to changes in alsack variables
+		# Hessians wrt slack variables measures the curvature of the cost function wrt to changes in slack variables, diagonals of hessian represent
+		# the second derivatives of the cost function wrt corresponding slack variables
+		# Higher hessian value indicates how rapidly the gradient of the cost function changes wrt slack variables
+
+		# Higher gradient and higher hessian increas penalty for violations of the lower or upper bounds of slack variables
+
 
         # Solver options
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp_options.AcadosOcpOptions

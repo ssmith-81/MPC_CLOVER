@@ -42,8 +42,9 @@ PI_2 = math.pi/2
 X = []
 VX = []
 Y = []
-UX = []
-UZ = []
+Ux = []
+Uy = []
+Uz = []
 Z = []
 VZ = []
 
@@ -70,7 +71,7 @@ class fcuModes:
 
 class clover:
 
-	def __init__(self, FLIGHT_ALTITUDE = 1.0, RATE = 50, RADIUS = 2, CYCLE_S = 27, N_horizon=6, T_horizon=1/50): # rate = 50hz radius = 5m cycle_s = 25
+	def __init__(self, FLIGHT_ALTITUDE = 1.0, RATE = 50, RADIUS = 2.5, CYCLE_S = 15, N_horizon=10, T_horizon=1): # rate = 50hz radius = 5m cycle_s = 25
         
  		
  		# Publisher which will publish to the topic '/mavros/setpoint_velocity/cmd_vel'.
@@ -306,8 +307,9 @@ class clover:
 			X.append(telem.x)
 			VX.append(telem.vx)
 			Y.append(telem.y)
-			UX.append(u0[0])
-			UZ.append(u0[2])
+			Ux.append(u0[0])
+			Uy.append(u0[1])
+			Uz.append(u0[2])
 			Z.append(telem.z)
 			VZ.append(telem.vz)
 			
@@ -340,9 +342,13 @@ class clover:
 		rospy.sleep(6)
 		# debug section
 		plt.figure(1)
+		plt.subplot(211)
 		#plt.plot(t,velx)
 		plt.plot(t,posx)
 		plt.plot(X)
+		plt.subplot(212)
+		plt.plot(t,velx)
+		plt.plot(VX)
 		#plt.plot(t,afx)
 		#plt.plot(t,yawc)
 		#plt.plot(t,yaw_ratec)
@@ -350,18 +356,37 @@ class clover:
 
 		plt.figure(2)
 		plt.subplot(311)
-		plt.plot(UX,'r')
+		plt.plot(Ux,'r')
 		plt.legend()
 		plt.grid(True)
 		plt.ylabel('yaw [deg]')
 		plt.xlabel('Time [s]')
 		plt.subplot(312)
-		plt.plot(UZ,'r')
+		plt.plot(Uz,'r')
 		plt.grid(True)
 		plt.subplot(313)
 		plt.plot(VZ,'r')
 		plt.grid(True)
+
+		plt.figure(4)
+		plt.subplot(311)
+		plt.plot(t, Ux,'r')
+		plt.legend()
+		plt.grid(True)
+		plt.ylabel('Ux')
+		plt.subplot(312)
+		plt.plot(t, Uy,'b')
+		plt.legend()
+		plt.grid(True)
+		plt.ylabel('Uy')
+		plt.subplot(313)
+		plt.plot(t, Uz,'r')
+		plt.legend()
+		plt.grid(True)
+		plt.ylabel('T_input')
+		plt.xlabel('Time [s]')
 		plt.show()
+		
 		
 		rospy.spin()
 
