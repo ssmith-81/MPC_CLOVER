@@ -250,6 +250,7 @@ class clover:
 					yref = np.array([posx[-1]+0.15, velx[-1], posy[-1], vely[-1], posz[-1], velz[-1], 0, 0, 0])
     
 				acados_solver.set(j, "yref", yref)
+				acados_solver.set(j, "p", np.array([2,0,0,2,0,0])) # State = [x, vx, ax, y, vy, ay]
 
 			index2 = k + self.N_horizon
 			if index2 < len(posx):
