@@ -49,7 +49,7 @@ def export_clover_model():
 
 	# Parameters (CasADi variable descibing parameters of the DAE; Default [].
 	# parameters
-	p = vertcat([x_obs, vx_obs, ax_obs, y_obs, vy_obs, ay_obs]) # Obstacle state
+	p = vertcat(x_obs, vx_obs, ax_obs, y_obs, vy_obs, ay_obs) # Obstacle state
 	
 	
 	# define model

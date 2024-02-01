@@ -117,18 +117,21 @@ def acados_settings(N_horizon, T_horizon):
 		ay_obs = state[5]
 
 		# Radius of obstacle to avoid
-		r = 0.5
+		r = 1.2
 		# TODO Update obstacle states here
-		q1 = 1
-		q2 = 1
-		delta_p = np.array([model.x[0]-model.p[0], model.x[2] - y_obs])
-		delta_v = np.array([model.x[1] - vx_obs, model.x[3] - vy_obs])
-		delta_a = np.array([model.u[0]-ax_obs, model.u[1] - ay_obs])
+		# State = x_obs, vx_obs, ax_obs, y_obs, vy_obs, ay_obs
+		q1 = 15
+		q2 = 10
+		delta_p = np.array([model.x[0]-model.p[0], model.x[2] - model.p[3]])
+		delta_v = np.array([model.x[1] - model.p[1], model.x[3] - model.p[4]])
+		delta_a = np.array([model.u[0]-model.p[2], model.u[1] - model.p[5]])
+
+
 
 		norm_delta_p = norm_1(delta_p)#np.linalg.norm(delta_p, ord=1)
 		norm_delta_v = norm_1(delta_v)#np.linalg.norm(delta_v, ord=1)
 
-		c_ol = (norm_delta_v**2)/norm_delta_p - ((np.dot(norm_delta_p,norm_delta_v))**2)/(norm_delta_p**3) + (q1+q2)*(np.dot(norm_delta_p,norm_delta_v))/norm_delta_p + q1*q2*(norm_delta_p - r)
+		c_ol = (norm_delta_v**2)/norm_delta_p - ((np.dot(delta_p,delta_v))**2)/(norm_delta_p**3) + (q1+q2)*(np.dot(delta_p,delta_v))/norm_delta_p + q1*q2*(norm_delta_p - r)
 
 		ocp.model.con_h_expr = c_ol + np.dot(delta_p,delta_a)/norm_delta_p
 
@@ -138,17 +141,17 @@ def acados_settings(N_horizon, T_horizon):
 		ocp.constraints.uh = h_ub
 
 		# Usage of slack variables to relax the above hard constraints
-		ocp.constraints.Jsh = np.eye(1)
-		# slacks
-		L2_pen = 1e3 # 1e3
-		L1_pen = 1  #1
+		# ocp.constraints.Jsh = np.eye(1)
+		# # slacks
+		# L2_pen = 1e4 # 1e3
+		# L1_pen = 1e1  #1
 
-		ocp.cost.Zl = L2_pen*np.ones((1,)) # Diagonal of hessian WRT lower slack
-		ocp.cost.Zu = L2_pen*np.ones((1,))
-		ocp.cost.zl = L1_pen*np.ones((1,)) # Gradient with rspect to lower slack at intermediate shooting nodes
-		ocp.cost.zu = L1_pen*np.ones((1,))
-		ocp.constraints.lh_e = h_lb
-		ocp.constraints.uh_e = h_ub
+		# ocp.cost.Zl = L2_pen*np.ones((1,)) # Diagonal of hessian WRT lower slack
+		# ocp.cost.Zu = L2_pen*np.ones((1,))
+		# ocp.cost.zl = L1_pen*np.ones((1,)) # Gradient with rspect to lower slack at intermediate shooting nodes
+		# ocp.cost.zu = L1_pen*np.ones((1,))
+		# ocp.constraints.lh_e = h_lb
+		# ocp.constraints.uh_e = h_ub
 
 		# Gradient indicates how changes in slack variables influence cost function. Higher gradient value implies stronger influence of the slack variables
 		# on the cost. It determines rate of change of the cost wrt to changes in alsack variables
@@ -156,7 +159,7 @@ def acados_settings(N_horizon, T_horizon):
 		# the second derivatives of the cost function wrt corresponding slack variables
 		# Higher hessian value indicates how rapidly the gradient of the cost function changes wrt slack variables
 
-		# Higher gradient and higher hessian increas penalty for violations of the lower or upper bounds of slack variables
+		# Higher gradient and higher hessian increase penalty for violations of the lower or upper bounds of slack variables
 
 
         # Solver options

@@ -71,7 +71,7 @@ class fcuModes:
 
 class clover:
 
-	def __init__(self, FLIGHT_ALTITUDE = 1.0, RATE = 50, RADIUS = 2.5, CYCLE_S = 15, N_horizon=10, T_horizon=1): # rate = 50hz radius = 5m cycle_s = 25
+	def __init__(self, FLIGHT_ALTITUDE = 1.0, RATE = 50, RADIUS = 3.5, CYCLE_S = 15, N_horizon=10, T_horizon=1): # rate = 50hz radius = 5m cycle_s = 25
         
  		
  		# Publisher which will publish to the topic '/mavros/setpoint_velocity/cmd_vel'.
@@ -178,9 +178,9 @@ class clover:
 			
 			 # Position
 			# https:#www.wolframalpha.com/input/?i=%28-r*cos%28a%29*sin%28a%29%29%2F%28%28sin%28a%29%5E2%29%2B1%29
-			posx[i] = -(r*c*s) / sspo
+			posx[i] = -(r*c*s) / sspo + 2.5
 			# https:#www.wolframalpha.com/input/?i=%28r*cos%28a%29%29%2F%28%28sin%28a%29%5E2%29%2B1%29
-			posy[i] =  (r*c)   / sspo
+			posy[i] =  (r*c)   / sspo + 2.5
 			posz[i] =  self.FLIGHT_ALTITUDE
 
 			# Velocity
@@ -244,22 +244,23 @@ class clover:
 				index = k + j
 				# Check if index is within the bounds of the arrays
 				if index < len(posx):
-					yref = np.array([posx[index]+0.15, velx[index], posy[index], vely[index], posz[index], velz[index], 0, 0, 0])
+					yref = np.array([posx[index], velx[index], posy[index], vely[index], posz[index], velz[index], 0, 0, 0])
 				else:
 					# If index exceeds the length of the arrays, use the last elements
-					yref = np.array([posx[-1]+0.15, velx[-1], posy[-1], vely[-1], posz[-1], velz[-1], 0, 0, 0])
+					yref = np.array([posx[-1], velx[-1], posy[-1], vely[-1], posz[-1], velz[-1], 0, 0, 0])
     
 				acados_solver.set(j, "yref", yref)
-				acados_solver.set(j, "p", np.array([2,0,0,2,0,0])) # State = [x, vx, ax, y, vy, ay]
+				acados_solver.set(j, "p", np.array([2.5,0,0,2.5,0,0])) # State = [x, vx, ax, y, vy, ay]
 
 			index2 = k + self.N_horizon
 			if index2 < len(posx):
 
-				yref_N = np.array([posx[k+self.N_horizon]+0.15,velx[k+self.N_horizon],posy[k+self.N_horizon],vely[k+self.N_horizon],posz[k+self.N_horizon],velz[k+self.N_horizon]]) # terminal components
+				yref_N = np.array([posx[k+self.N_horizon],velx[k+self.N_horizon],posy[k+self.N_horizon],vely[k+self.N_horizon],posz[k+self.N_horizon],velz[k+self.N_horizon]]) # terminal components
 			else:
-				yref_N = np.array([posx[-1]+0.15, velx[-1], posy[-1], vely[-1], posz[-1], velz[-1]])
+				yref_N = np.array([posx[-1], velx[-1], posy[-1], vely[-1], posz[-1], velz[-1]])
 
 			acados_solver.set(self.N_horizon, "yref", yref_N)
+			acados_solver.set(self.N_horizon, "p", np.array([2.5,0,0,2.5,0,0])) # State = [x, vx, ax, y, vy, ay]
 
 			# Solve ocp
 			status = acados_solver.solve()
@@ -284,9 +285,9 @@ class clover:
 			# target.acceleration_or_force.z = afz[k]
 
 			# Feedforward acceleration setpoints as well
-			target.acceleration_or_force.x = u0[0] + afx[k]
-			target.acceleration_or_force.y = u0[1] + afy[k]
-			target.acceleration_or_force.z = u0[2] + afz[k]
+			target.acceleration_or_force.x = u0[0] #+ afx[k]
+			target.acceleration_or_force.y = u0[1] #+ afy[k]
+			target.acceleration_or_force.z = u0[2] #+ afz[k]
 			
 			# Gather yaw for publishing
 			target.yaw = yawc[k]
@@ -343,13 +344,14 @@ class clover:
 		rospy.sleep(6)
 		# debug section
 		plt.figure(1)
-		plt.subplot(211)
+		# plt.subplot(211)
 		#plt.plot(t,velx)
-		plt.plot(t,posx)
-		plt.plot(X)
-		plt.subplot(212)
-		plt.plot(t,velx)
-		plt.plot(VX)
+		plt.plot(posx,posy)
+		plt.plot(X,Y)
+		plt.axis('equal')
+		# plt.subplot(212)
+		# plt.plot(t,velx)
+		# plt.plot(VX)
 		#plt.plot(t,afx)
 		#plt.plot(t,yawc)
 		#plt.plot(t,yaw_ratec)
