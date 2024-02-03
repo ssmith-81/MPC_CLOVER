@@ -251,6 +251,14 @@ class clover:
 			#target.type_mask =  2048 # Use position, velocity, acceleration, and yaw
 
 			obj = object_loc(frame_id = 'map')
+			test2 = np.array([obj.x[0],0,0.0,obj.y[self.N_horizon],0,0.0])
+			# print(type(test2))
+			# print(test2.dtype)
+			# print(obj.y.dtype)
+			# print(obj.y)
+			# print(obj.y[0])
+			# print(obj.y[self.N_horizon])
+			# print(obj.x[-1])
 			
 			# update reference
 			for j in range(self.N_horizon): # Up to N-1
@@ -265,7 +273,12 @@ class clover:
     
 				acados_solver.set(j, "yref", yref)
 				# acados_solver.set(j, "p", np.array([2.5,0,0,2.5,0,0])) # State = [x, vx, ax, y, vy, ay]
-				acados_solver.set(self.N_horizon, "p", np.array([obj.x[j],obj.vx[j],obj.ax[j],obj.y[j],obj.vy[j],obj.ay[j]])) # State = [x, vx, ax, y, vy, ay]
+				# acados_solver.set(j, "p", np.array([5.5678987695432+j*0.00003458792871,0.2,0,obj.y[j],0.2,0])) # Works
+				acados_solver.set(j, "p", np.array([obj.x[j],obj.vx[j],obj.ax[j],obj.y[j],obj.vy[j],obj.ay[j]]))
+				# test = np.array([5.5678987695432+j*0.00003458792871,0.2,0,5.67865,0.2,0])
+				# print(type(test))
+				# print(test.dtype)
+				# acados_solver.set(self.N_horizon, "p", np.array([obj.x[j],0,0.0,obj.y[j],0,0.0])) # State = [x, vx, ax, y, vy, ay]
 
 			#index2 = k + self.N_horizon
 			index2 = k + self.N_steps # This considers the amount of steps in the reference trajectory, considering time of prediction horizon and rate of reference trajectory
@@ -277,7 +290,9 @@ class clover:
 
 			acados_solver.set(self.N_horizon, "yref", yref_N)
 			# acados_solver.set(self.N_horizon, "p", np.array([2.5,0,0,2.5,0,0])) # State = [x, vx, ax, y, vy, ay]
-			acados_solver.set(self.N_horizon, "p", np.array([obj.x[self.N_horizon-1],obj.vx[self.N_horizon-1],obj.ax[self.N_horizon-1],obj.y[self.N_horizon-1],obj.vy[self.N_horizon-1],obj.ay[self.N_horizon-1]])) # State = [x, vx, ax, y, vy, ay]
+			# acados_solver.set(j, "p", np.array([5.6,0.2,0,5.6,0.2,0]))
+			#acados_solver.set(self.N_horizon, "p", np.array([obj.x[self.N_horizon-1],obj.vx[self.N_horizon-1],obj.ax[self.N_horizon-1],obj.y[self.N_horizon-1],obj.vy[self.N_horizon-1],obj.ay[self.N_horizon-1]])) # State = [x, vx, ax, y, vy, ay]
+			acados_solver.set(self.N_horizon, "p", np.array([obj.x[-1],obj.vx[-1],obj.ax[-1],obj.y[-1],obj.vy[-1],obj.ay[-1]])) # State = [x, vx, ax, y, vy, ay]
 
 			# Solve ocp
 			status = acados_solver.solve()

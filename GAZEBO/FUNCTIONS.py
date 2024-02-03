@@ -82,8 +82,8 @@ def acados_settings(N_horizon, T_horizon):
 
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpConstraints
         # constraints u = [ux,uy,uz] -> acceleration commands
-		u_lb = np.array([-10, -10, -10])
-		u_ub = np.array([10, 10, 10])
+		u_lb = np.array([-100, -100, -100])
+		u_ub = np.array([100, 100, 100])
 
 		ocp.constraints.constr_type = 'BGH'  # BGP is for convex over nonlinear.
 		ocp.constraints.lbu = u_lb
@@ -120,8 +120,8 @@ def acados_settings(N_horizon, T_horizon):
 		r = 1.2
 		# TODO Update obstacle states here
 		# State = x_obs, vx_obs, ax_obs, y_obs, vy_obs, ay_obs
-		q1 = 1#15
-		q2 = 1#10
+		q1 = 12#15
+		q2 = 9#10
 		delta_p = np.array([model.x[0]-model.p[0], model.x[2] - model.p[3]])
 		delta_v = np.array([model.x[1] - model.p[1], model.x[3] - model.p[4]])
 		delta_a = np.array([model.u[0]-model.p[2], model.u[1] - model.p[5]])
@@ -143,10 +143,10 @@ def acados_settings(N_horizon, T_horizon):
 		ocp.constraints.uh = h_ub
 
 		# Usage of slack variables to relax the above hard constraints
-		# ocp.constraints.Jsh = np.eye(1)
+		ocp.constraints.Jsh = np.eye(1)
 		# # slacks
 		L2_pen = 1e3 # 1e3
-		L1_pen = 1  #1
+		L1_pen = 1e2  #1
 
 		ocp.cost.Zl = L2_pen*np.ones((1,)) # Diagonal of hessian WRT lower slack
 		ocp.cost.Zu = L2_pen*np.ones((1,))

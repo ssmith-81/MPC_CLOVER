@@ -147,9 +147,9 @@ class clover:
 			
 			# Position
 			# https:#www.wolframalpha.com/input/?i=%28-r*cos%28a%29*sin%28a%29%29%2F%28%28sin%28a%29%5E2%29%2B1%29
-			posx[i] = -(r*c*s) / sspo + 2.5
+			posx[i] = -(r*c*s) / sspo + 3.0 # 2.5
 			# https:#www.wolframalpha.com/input/?i=%28r*cos%28a%29%29%2F%28%28sin%28a%29%5E2%29%2B1%29
-			posy[i] =  (r*c)   / sspo + 3.5
+			posy[i] =  (r*c)   / sspo + 3.5 # 3.5
 			posz[i] =  self.FLIGHT_ALTITUDE
 
 			# Velocity
@@ -205,16 +205,16 @@ class clover:
 			resp = set_state( state_msg )
 
 			# Prelocatted lists
-			pose.x = [0.0]*10
-			pose.y = [0.0]*10
-			pose.vx = [0.0]*10
-			pose.vy = [0.0]*10
-			pose.ax = [0.0]*10
-			pose.ay = [0.0]*10
+			pose.x = [0.0]*11
+			pose.y = [0.0]*11
+			pose.vx = [0.0]*11
+			pose.vy = [0.0]*11
+			pose.ax = [0.0]*11
+			pose.ay = [0.0]*11
 
 			#Publish the current state and the predicted state over the prediction horizon
 			j = 0 # array wrap around index
-			for i in range(10): # up to prediction horizon=10 for now
+			for i in range(11): # up to prediction horizon=10 for now (so n+1 spots)
 				#index = k + j
 				index = k + self.dt_ref # Taking into account the amount of time per prediction horizon interval relative to the sampling rate of the reference trajectory
 				# Check if index is within the bounds of the arrays
