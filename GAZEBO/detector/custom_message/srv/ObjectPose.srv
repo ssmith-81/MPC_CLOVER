@@ -1,0 +1,8 @@
+string frame_id
+---
+float64[10] x
+float64[10] y
+float64[10] vx
+float64[10] vy
+float64[10] ax
+float64[10] ay
