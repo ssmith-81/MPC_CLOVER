@@ -16,7 +16,8 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
-#from clover import srv
+from clover import srv
+from custom_message import srv as surf
 from time import sleep
 # import all mavros messages and services
 from mavros_msgs.msg import *
@@ -32,6 +33,9 @@ set_velocity = rospy.ServiceProxy('set_velocity', srv.SetVelocity)
 set_attitude = rospy.ServiceProxy('set_attitude', srv.SetAttitude)
 set_rates = rospy.ServiceProxy('set_rates', srv.SetRates)
 land = rospy.ServiceProxy('land', Trigger)
+
+# Add in external position of target object service
+object_loc = rospy.ServiceProxy('ObjectPose',surf.ObjectPose)
 
 # Release service to allow for complex trajectory publishing i.e stopping navigate service publishing because you dont want two sources of publishing at the same time.
 release = rospy.ServiceProxy('simple_offboard/release', Trigger)
@@ -71,8 +75,8 @@ class fcuModes:
 
 class clover:
 
-	def __init__(self, FLIGHT_ALTITUDE = 1.0, RATE = 50, RADIUS = 3.5, CYCLE_S = 15, N_horizon=10, T_horizon=1): # rate = 50hz radius = 5m cycle_s = 25
-        
+	def __init__(self, FLIGHT_ALTITUDE = 1.0, RATE = 50, RADIUS = 3.5, CYCLE_S = 15, N_horizon=10, T_horizon=1.0): # rate = 50hz radius = 5m cycle_s = 25
+        # If you change prediction horizon intervals or time, need to hardcode changes in set_object_state
  		
  		# Publisher which will publish to the topic '/mavros/setpoint_velocity/cmd_vel'.
 		self.velocity_publisher = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel',TwistStamped, queue_size=10)
@@ -82,11 +86,17 @@ class clover:
 		self.RATE            = RATE                     # loop rate hz
 		self.RADIUS          = RADIUS                   # radius of figure 8 in meters
 		self.CYCLE_S         = CYCLE_S                  # time to complete one figure 8 cycle in seconds
-		self.STEPS           = int( self.CYCLE_S * self.RATE )
+		self.STEPS           = int( self.CYCLE_S * self.RATE ) # Total number of steps in the trajectory
 		
 		# MPC variables
 		self.N_horizon = N_horizon # Define prediction horizone in terms of optimization intervals
 		self.T_horizon = T_horizon # Define the prediction horizon in terms of time (s) --> Limits time and improves efficiency
+		# This will have time step within prediction horizon as dt = T/N, would probably like it to be close to
+		# self.CYCLE_S/self.STEPS = dt
+
+		# Compute the prediction horizon length in terms of steps in the reference trajectory
+		self.N_steps = int(self.T_horizon*self.RATE)
+		self.dt_ref = int(self.N_steps/self.N_horizon) # This is the amount of steps ahead within the reference trajectory array, per iteration in the prediction horizon
 
 		
 		# Publisher which will publish to the topic '/mavros/setpoint_raw/local'.
@@ -227,6 +237,7 @@ class clover:
 		acados_solver.set(0, "lbx", x0) # Update the zero shooting node position
 		acados_solver.set(0, "ubx", x0) # update the zero shooting node control input
 
+		
 		while not rospy.is_shutdown():
 		
 			target.header.frame_id = 'aruco_map'
@@ -238,10 +249,13 @@ class clover:
 			#target.type_mask =  3520 # Use position and velocity
 			#target.type_mask =  3072 # Use position, velocity, and acceleration
 			#target.type_mask =  2048 # Use position, velocity, acceleration, and yaw
+
+			obj = object_loc(frame_id = 'map')
 			
 			# update reference
-			for j in range(self.N_horizon):
-				index = k + j
+			for j in range(self.N_horizon): # Up to N-1
+				#index = k + j
+				index = k + self.dt_ref # Taking into account the amount of time per prediction horizon interval relative to the sampling rate of the reference trajectory
 				# Check if index is within the bounds of the arrays
 				if index < len(posx):
 					yref = np.array([posx[index], velx[index], posy[index], vely[index], posz[index], velz[index], 0, 0, 0])
@@ -250,9 +264,11 @@ class clover:
 					yref = np.array([posx[-1], velx[-1], posy[-1], vely[-1], posz[-1], velz[-1], 0, 0, 0])
     
 				acados_solver.set(j, "yref", yref)
-				acados_solver.set(j, "p", np.array([2.5,0,0,2.5,0,0])) # State = [x, vx, ax, y, vy, ay]
+				# acados_solver.set(j, "p", np.array([2.5,0,0,2.5,0,0])) # State = [x, vx, ax, y, vy, ay]
+				acados_solver.set(self.N_horizon, "p", np.array([obj.x[j],obj.vx[j],obj.ax[j],obj.y[j],obj.vy[j],obj.ay[j]])) # State = [x, vx, ax, y, vy, ay]
 
-			index2 = k + self.N_horizon
+			#index2 = k + self.N_horizon
+			index2 = k + self.N_steps # This considers the amount of steps in the reference trajectory, considering time of prediction horizon and rate of reference trajectory
 			if index2 < len(posx):
 
 				yref_N = np.array([posx[k+self.N_horizon],velx[k+self.N_horizon],posy[k+self.N_horizon],vely[k+self.N_horizon],posz[k+self.N_horizon],velz[k+self.N_horizon]]) # terminal components
@@ -260,7 +276,8 @@ class clover:
 				yref_N = np.array([posx[-1], velx[-1], posy[-1], vely[-1], posz[-1], velz[-1]])
 
 			acados_solver.set(self.N_horizon, "yref", yref_N)
-			acados_solver.set(self.N_horizon, "p", np.array([2.5,0,0,2.5,0,0])) # State = [x, vx, ax, y, vy, ay]
+			# acados_solver.set(self.N_horizon, "p", np.array([2.5,0,0,2.5,0,0])) # State = [x, vx, ax, y, vy, ay]
+			acados_solver.set(self.N_horizon, "p", np.array([obj.x[self.N_horizon-1],obj.vx[self.N_horizon-1],obj.ax[self.N_horizon-1],obj.y[self.N_horizon-1],obj.vy[self.N_horizon-1],obj.ay[self.N_horizon-1]])) # State = [x, vx, ax, y, vy, ay]
 
 			# Solve ocp
 			status = acados_solver.solve()
