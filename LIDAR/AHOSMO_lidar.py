@@ -165,8 +165,8 @@ class clover:
 			# ranges_filtered = ranges[valid_indices]
 			
 			# Filter out the inf values in the data point arrays
-			x_local2 = x_local2[np.isfinite(x_local2)]
-			y_local2 = y_local2[np.isfinite(y_local2)]
+			# x_local2 = x_local2[np.isfinite(x_local2)]
+			# y_local2 = y_local2[np.isfinite(y_local2)]
 			
 			# The array of local data points starts at position 0 with the right most detected point, and ends with the left most detected point.
 			# Therefore we will use the same setup as the RM paper and build the equation for l_1 off of the left most point (end point of the array)
@@ -180,18 +180,86 @@ class clover:
 			A_2 = -1*(x_local2[0] - x_L)/(y_local2[0] - y_L)
 			
 			# Divide Lidar range into nr intervals
-			nr = 40
+			nr = 10
 			
 			# Initialize variables to store sector measurements and midpoints
 			sector_ranges = [[] for _ in range(nr)]
+			sector_xy = [[] for _ in range(nr)] # initialize sector_xy as a list of empy lists
+			sector_mean = [] 
 			
 			# Iterate through LiDAR measurements and assign them to sectors
 			for i, measurement in enumerate(ranges):
 				if np.isfinite(measurement): # filter out invalid or inf measurements
 					sector_index = int(i*nr/len(ranges))
 					sector_ranges[sector_index].append(measurement)
+
+					# Calculate x,y coordinates from measurements and angles (in the local Lidar ref frame 
+					# where the y-axis is forward and the x-axis is pointing right)
+					x_sec = measurement*np.sin(angles[i]) # select appropriate angle from angles array
+					x_sec = np.multiply(x_sec,-1)
+					y_sec = measurement*np.cos(angles[i])
+
+					# Append [x, y] coordinates to sector_xy
+					sector_xy[sector_index].append([x_sec,y_sec])
 			
+			
+
+
+			# Average position per sector
+			z_bar = []
+			 # Calculate average x, and y for each sector for each sector
+			for sector in sector_xy:
+				# Convert sector to a numpy array
+				sector_array = np.array(sector)
+
+				# If sector has data, clculate [x_bar, y_bar], else set the mean to None
+				if sector:
+					# Calculate the x and y coordinates using np.mean along axis
+					x_bar = np.mean(sector_array[:, 0]) # Calculate mean of x coordinate (column 0)
+					y_bar = np.mean(sector_array[:, 1]) # Calculate mean of y coordinate
+				else:
+					x_bar, y_bar = None, None
+					
+				z_bar.append([x_bar, y_bar]) # append [x_bar, y_bar] to z_bar
+			
+			# Find the range of sectors with data (so we will disregard sectors before and after obstacle)
+			start_sector = None
+			end_sector = None
+			for i, z in enumerate(z_bar):
+				if z is not None:
+					if start_sector is None:
+						start_sector = i
+					end_sector = i
+
+			# # Ensure that the last sector with data is an even number (so we have paired sectors)
+			# if end_sector is not None and end_sector % 2 != 0:
+			# 	end_sector -= 1
+
+			# Ensure that the total number of sectors with data is even
+			if start_sector is not None and end_sector is not None and (end_sector - start_sector) % 2 == 0:
+				end_sector -= 1
+
+			# # Formulate z_bar_filter array that only includes values from sectors that have paired sector values
+			
+			# # Apply the algorithm considering only sectors with pairs of data
+			# zbar_with_pairs = []
+			# for i in range(start_sector, end_sector + 1, 2):
+			# 	paired_index = (i + 1) if i % 2 == 0 else (i - 1)
+			# 	if z_bar[i] is not None and z_bar[paired_index] is not None:
+			# 		zbar_with_pairs.append(z_bar[i])
+			# Apply the algorithm considering only sectors with pairs of data
+			zbar_with_pairs = []
+			if start_sector is not None and end_sector is not None:
+				for i in range(start_sector, end_sector + 1, 2):
+					paired_index = i + 1
+					if z_bar[i] is not None and z_bar[paired_index] is not None:
+						zbar_with_pairs.append(z_bar[i])
+
 			print(sector_ranges)
+			print(sector_xy)
+			print(z_bar)
+			print(zbar_with_pairs)
+
 			# If n_bar <= threshold-----------------------------
 			
 			
