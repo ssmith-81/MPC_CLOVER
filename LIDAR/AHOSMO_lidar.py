@@ -157,6 +157,13 @@ class clover:
 			
 			# Filter out the inf values in the data point arrays
 			valid_indices = np.isfinite(x_local2) & np.isfinite(y_local2)
+
+			# Check if the number of True values is even (use this if we are using Z for l3 not Z_bar):
+			if np.sum(valid_indices) % 2 != 0: # want to make sure we have pair data readings and not one without a pair
+    		# Find the index of the last True value
+				last_true_index = np.where(valid_indices)[0][-1]
+    		# Set the last True value to False
+				valid_indices[last_true_index] = False # disregard the last reading if there is not an even amount for even pairs
 			
 			# Filter x_local2, y_local2, and angles based on valid_indices
 			x_local2_filtered = x_local2[valid_indices]
@@ -174,91 +181,156 @@ class clover:
 			x_L = 0
 			y_L = 0
 			# Coordinate equation for stratight line l_1
-			A_1 = -1*(x_local2[-1]-x_L)/(y_local2[-1]-y_L)
-			B_1 = y_local2[-1] - A_1*x_local2[-1]
+			A_1 = -1*(x_local2_filtered[-1]-x_L)/(y_local2_filtered[-1]-y_L)
+			B_1 = y_local2_filtered[-1] - A_1*x_local2_filtered[-1]
 			# Coordinate equation for straight line l_2
-			A_2 = -1*(x_local2[0] - x_L)/(y_local2[0] - y_L)
-			
-			# Divide Lidar range into nr intervals
-			nr = 10
-			
-			# Initialize variables to store sector measurements and midpoints
-			sector_ranges = [[] for _ in range(nr)]
-			sector_xy = [[] for _ in range(nr)] # initialize sector_xy as a list of empy lists
-			sector_mean = [] 
-			
-			# Iterate through LiDAR measurements and assign them to sectors
-			for i, measurement in enumerate(ranges):
-				if np.isfinite(measurement): # filter out invalid or inf measurements
-					sector_index = int(i*nr/len(ranges))
-					sector_ranges[sector_index].append(measurement)
+			A_2 = -1*(x_local2_filtered[0] - x_L)/(y_local2_filtered[0] - y_L)
 
-					# Calculate x,y coordinates from measurements and angles (in the local Lidar ref frame 
-					# where the y-axis is forward and the x-axis is pointing right)
-					x_sec = measurement*np.sin(angles[i]) # select appropriate angle from angles array
-					x_sec = np.multiply(x_sec,-1)
-					y_sec = measurement*np.cos(angles[i])
+			# print(x_local2)
+			# print(x_local2_filtered)
+			# print(valid_indices)
 
-					# Append [x, y] coordinates to sector_xy
-					sector_xy[sector_index].append([x_sec,y_sec])
+#---------------------Just use Z to estimate l3, probably the easiest thing to do for now------------------------------------------
+
+# Like the lidar measurements are already divided up into sectors, why would I need to redivide it up into more sectors and then take the average?
+# seems strange, lets just get this working this way, also we will have more n paired data points this way.
+
+			# Calculate the midpoints Z_bar
+			# Initialize an empty list to store the averaged values
+			x_bar = []
+			y_bar = []
+			Z_bar = []
+
+			# Calculate the number of elements in the array
+			n = len(x_local2_filtered)
+
+			# Calculate the number of pairs (assuming an even number of elements)
+			num_pairs = n // 2
+
+			# Iterate through the array to average pairs of values
+			for i in range(num_pairs):
+    		# Calculate the indices of the pair
+				first_index = i
+				second_index = n - 1 - i
+    
+    		# Calculate the average of the pair and append it to x_bar
+				average_valuex = (x_local2_filtered[first_index] + x_local2_filtered[second_index]) / 2
+				average_valuey = (y_local2_filtered[first_index] + y_local2_filtered[second_index]) / 2
+				x_bar.append(average_valuex)
+				y_bar.append(average_valuey)
+				Z_bar.append([x_bar,y_bar])
+
+			x_bar = x_bar[::-1] # reverse so we have the points 'closest together' (look at fig in paper) at the beginning of the array
+			y_bar = y_bar[::-1]	
+			Z_bar = Z_bar[::-1]
+			
+			column_1 = np.array(x_bar)
+			column_2 = np.ones_like(column_1)
+
+			# set up to solve least squares problem with Cx = d where x = [A_3, B_3]
+			C = np.column_stack((column_1,column_2)) 
+			d = np.column_stack(np.array(y_bar)).T
+			# solve the least squares problem
+			solution = np.linalg.lstsq(C, d, rcond=None)[0]
+			# print(x_local2)
+			print(x_local2_filtered)
+			print(x_bar)
+			print(C)
+			print(d)
+			print(solution) # Verify this some how, make sure there are many data points. plot the lines l_1, l_2 and l_3 in desmos to verify maybe. plot the points local_filtered and Z_bar and compare
+			# maybe try plotting using matplot lib in here to verify shape and things. If the line l_3 matches up with center points and all looks good then move on...
+
+			
+
+#----------------attempting to use Z_bar and sectors------------------------------------------------------------------------------------------------
+			
+	# 		# Divide Lidar range into nr intervals
+	# 		nr = 10
+			
+	# 		# Initialize variables to store sector measurements and midpoints
+	# 		sector_ranges = [[] for _ in range(nr)]
+	# 		sector_xy = [[] for _ in range(nr)] # initialize sector_xy as a list of empy lists
+	# 		sector_mean = [] 
+			
+
+	# 		# Iterate through LiDAR measurements and assign them to sectors
+	# 		for i, measurement in enumerate(ranges):
+	# 			if np.isfinite(measurement): # filter out invalid or inf measurements
+	# 				sector_index = int(i*nr/len(ranges))
+	# 				sector_ranges[sector_index].append(measurement)
+
+	# 				# Calculate x,y coordinates from measurements and angles (in the local Lidar ref frame 
+	# 				# where the y-axis is forward and the x-axis is pointing right)
+	# 				x_sec = measurement*np.sin(angles[i]) # select appropriate angle from angles array
+	# 				x_sec = np.multiply(x_sec,-1)
+	# 				y_sec = measurement*np.cos(angles[i])
+
+	# 				# Append [x, y] coordinates to sector_xy
+	# 				sector_xy[sector_index].append([x_sec,y_sec])
 			
 			
 
 
-			# Average position per sector
-			z_bar = []
-			 # Calculate average x, and y for each sector for each sector
-			for sector in sector_xy:
-				# Convert sector to a numpy array
-				sector_array = np.array(sector)
+	# 		# Average position per sector
+	# 		z_bar = []
+	# 		 # Calculate average x, and y for each sector for each sector
+	# 		for sector in sector_xy:
+	# 			# Convert sector to a numpy array
+	# 			sector_array = np.array(sector)
 
-				# If sector has data, clculate [x_bar, y_bar], else set the mean to None
-				if sector:
-					# Calculate the x and y coordinates using np.mean along axis
-					x_bar = np.mean(sector_array[:, 0]) # Calculate mean of x coordinate (column 0)
-					y_bar = np.mean(sector_array[:, 1]) # Calculate mean of y coordinate
-				else:
-					x_bar, y_bar = None, None
+	# 			# If sector has data, clculate [x_bar, y_bar], else set the mean to None
+	# 			if sector:
+	# 				# Calculate the x and y coordinates using np.mean along axis
+	# 				x_bar = np.mean(sector_array[:, 0]) # Calculate mean of x coordinate (column 0)
+	# 				y_bar = np.mean(sector_array[:, 1]) # Calculate mean of y coordinate
+	# 			else:
+	# 				x_bar, y_bar = None, None
 					
-				z_bar.append([x_bar, y_bar]) # append [x_bar, y_bar] to z_bar
+	# 			z_bar.append([x_bar, y_bar]) # append [x_bar, y_bar] to z_bar
+
+	# 		##TODO everything before this is working in this section, everything after this is not working
 			
-			# Find the range of sectors with data (so we will disregard sectors before and after obstacle)
-			start_sector = None
-			end_sector = None
-			for i, z in enumerate(z_bar):
-				if z is not None:
-					if start_sector is None:
-						start_sector = i
-					end_sector = i
+	# 		# Find the range of sectors with data (so we will disregard sectors before and after obstacle)
+	# 		start_sector = None
+	# 		end_sector = None
+	# 		for i, z in enumerate(z_bar):
+	# 			if z is not None:
+	# 				if start_sector is None:
+	# 					start_sector = i # not sure this is i+1 and not i
+	# 				end_sector = i
 
-			# # Ensure that the last sector with data is an even number (so we have paired sectors)
-			# if end_sector is not None and end_sector % 2 != 0:
-			# 	end_sector -= 1
+	# 		# # Ensure that the last sector with data is an even number (so we have paired sectors)
+	# 		# if end_sector is not None and end_sector % 2 != 0:
+	# 		# 	end_sector -= 1
 
-			# Ensure that the total number of sectors with data is even
-			if start_sector is not None and end_sector is not None and (end_sector - start_sector) % 2 == 0:
-				end_sector -= 1
+	# 		# Ensure that the total number of sectors with data is even
+	# 		if start_sector is not None and end_sector is not None and (end_sector - start_sector) % 2 == 0:
+	# 			end_sector -= 1
 
-			# # Formulate z_bar_filter array that only includes values from sectors that have paired sector values
+	# 		# # Formulate z_bar_filter array that only includes values from sectors that have paired sector values 
 			
-			# # Apply the algorithm considering only sectors with pairs of data
-			# zbar_with_pairs = []
-			# for i in range(start_sector, end_sector + 1, 2):
-			# 	paired_index = (i + 1) if i % 2 == 0 else (i - 1)
-			# 	if z_bar[i] is not None and z_bar[paired_index] is not None:
-			# 		zbar_with_pairs.append(z_bar[i])
-			# Apply the algorithm considering only sectors with pairs of data
-			zbar_with_pairs = []
-			if start_sector is not None and end_sector is not None:
-				for i in range(start_sector, end_sector + 1, 2):
-					paired_index = i + 1
-					if z_bar[i] is not None and z_bar[paired_index] is not None:
-						zbar_with_pairs.append(z_bar[i])
+	# 		# # Apply the algorithm considering only sectors with pairs of data
+	# 		# zbar_with_pairs = []
+	# 		# for i in range(start_sector, end_sector + 1, 2):
+	# 		# 	paired_index = (i + 1) if i % 2 == 0 else (i - 1)
+	# 		# 	if z_bar[i] is not None and z_bar[paired_index] is not None:
+	# 		# 		zbar_with_pairs.append(z_bar[i])
+	# 		# Apply the algorithm considering only sectors with pairs of data
+	# 		# Apply the algorithm considering only sectors with pairs of data
+	# 		zbar_with_pairs = []
+	# 		if start_sector is not None and end_sector is not None:
+    # # Iterate over the sectors, pairing each one with its corresponding one from the other end
+	# 			for i in range(start_sector, start_sector + (end_sector - start_sector + 1) // 2):
+	# 				paired_index = end_sector - (i - start_sector)
+	# 				if z_bar[i] is not None and z_bar[paired_index] is not None:
+	# 					zbar_with_pairs.append(z_bar[i])
 
-			print(sector_ranges)
-			print(sector_xy)
-			print(z_bar)
-			print(zbar_with_pairs)
+	# 		# print(sector_ranges)
+	# 		# print(sector_xy)
+	# 		# print(z_bar)
+	# 		# print(zbar_with_pairs)
+
+#---------------------------------------------------------------------------------------------------------------------------------------------------------
 
 			# If n_bar <= threshold-----------------------------
 			
