@@ -23,6 +23,7 @@ from sensor_msgs.msg import Imu, LaserScan
 #from panel_functions import CLOVER_COMPONENTS, CLOVER_STREAM_GEOMETRIC_INTEGRAL, CLOVER_KUTTA, CLOVER_STREAMLINE, CLOVER_noOBSTACLE
 
 from scipy.interpolate import griddata
+from scipy.optimize import curve_fit, least_squares
 
 from tf.transformations import euler_from_quaternion
 
@@ -70,6 +71,14 @@ LidarA2 = []
 LidarB2 = []
 A3 = []
 B3 = []
+
+# Intersection points and estimated center
+mu1x = []
+mu1y = []
+mu2x = []
+mu2y = []
+zhatx = []
+zhaty = []
 
 xdispf=[]
 ydispf=[]
@@ -139,6 +148,10 @@ class clover:
 
 		self.current_state = State()
 		self.rate = rospy.Rate(20)
+
+	def ellipse(self,zxhat,zyhat,x,y,a,b):
+		# Define the general ellipse function that will be fit
+		return ((x-zhatx)**2 / a**2) + ((y-zyhat)**2 / b**2) - 1
 	
 	def lidar_read(self,data):
 
@@ -258,6 +271,17 @@ class clover:
 			# print([A_1,B_1])
 			# print([A_2,B_2])
 
+			# Calculate the intersection points
+			x_mu1 = (self.B_3 - self.B_1)/(self.A_1-self.A_3)
+			y_mu1 = self.A_1*(self.B_3-self.B_1)/(self.A_1-self.A_3) + self.B_1
+
+			x_mu2 = (self.B_3 - self.B_2)/(self.A_2-self.A_3)
+			y_mu2 = self.A_2*(self.B_3-self.B_2)/(self.A_2-self.A_3) + self.B_2
+
+			z_hatx = (x_mu1 +x_mu2)/2
+			z_haty = (y_mu1 + y_mu2)/2 
+
+
 			xf.append(self.x_local2_filtered)
 			yf.append(self.y_local2_filtered)
 			A1.append(self.A_1)
@@ -270,6 +294,13 @@ class clover:
 			LidarB2.append(0)
 			A3.append(self.A_3)
 			B3.append(self.B_3)
+
+			mu1x.append(x_mu1)
+			mu1y.append(y_mu1)
+			mu2x.append(x_mu2)
+			mu2y.append(y_mu2)
+			zhatx.append(z_hatx)
+			zhaty.append(z_haty)
 			
 
 #----------------attempting to use Z_bar and sectors------------------------------------------------------------------------------------------------
@@ -484,11 +515,15 @@ if __name__ == '__main__':
 		plt.plot(x,y2,'m--',label='l_2')
 		plt.plot(x,y_lidar2,'g',label='lidar2')
 		plt.plot(x,y3,'r',label='l_3')
+		plt.scatter(mu1x,mu1y,color='c',label='mu1')
+		plt.scatter(mu2x,mu2y,color='c',label='mu2')
+		plt.scatter(zhatx,zhaty,color='k',label='z_hat')
 		plt.legend()
 		plt.grid(True)
 		plt.axis('equal')
 		plt.xlim(-1.5,1.5)
 		plt.ylim(0,3.5)
+	
 		#plt.subplot(312)
 		#plt.plot(yf,'r',label='y-fol')
 		#plt.plot(ya,'b--',label='y-obs')
