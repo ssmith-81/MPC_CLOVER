@@ -57,8 +57,20 @@ release = rospy.ServiceProxy('simple_offboard/release', Trigger)
 PI_2 = math.pi/2
 
 # Debugging and logging
-xf = []  # This gathers the 
+xf = []  # This gathers the x-lidar points
 yf = []
+# Variables for lines l_1, l_2, l_3, lidar_line_1, lidar_line_2
+A1 = []
+B1 = []
+LidarA1 = []
+LidarB1 = []
+A2 = []
+B2 = []
+LidarA2 = []
+LidarB2 = []
+A3 = []
+B3 = []
+
 xdispf=[]
 ydispf=[]
 xa = []
@@ -155,6 +167,7 @@ class clover:
 			x_local2 = np.multiply(x_local2,-1)
 			y_local2 = ranges*np.cos(angles)
 			
+			
 			# Filter out the inf values in the data point arrays
 			valid_indices = np.isfinite(x_local2) & np.isfinite(y_local2)
 
@@ -166,8 +179,8 @@ class clover:
 				valid_indices[last_true_index] = False # disregard the last reading if there is not an even amount for even pairs
 			
 			# Filter x_local2, y_local2, and angles based on valid_indices
-			x_local2_filtered = x_local2[valid_indices]
-			y_local2_filtered = y_local2[valid_indices]
+			self.x_local2_filtered = x_local2[valid_indices]
+			self.y_local2_filtered = y_local2[valid_indices]
 			angles_filtered = angles[valid_indices]
 			# ranges_filtered = ranges[valid_indices]
 			
@@ -181,10 +194,11 @@ class clover:
 			x_L = 0
 			y_L = 0
 			# Coordinate equation for stratight line l_1
-			A_1 = -1*(x_local2_filtered[-1]-x_L)/(y_local2_filtered[-1]-y_L)
-			B_1 = y_local2_filtered[-1] - A_1*x_local2_filtered[-1]
+			self.A_1 = -1*(self.x_local2_filtered[-1]-x_L)/(self.y_local2_filtered[-1]-y_L)
+			self.B_1 = self.y_local2_filtered[-1] - self.A_1*self.x_local2_filtered[-1]
 			# Coordinate equation for straight line l_2
-			A_2 = -1*(x_local2_filtered[0] - x_L)/(y_local2_filtered[0] - y_L)
+			self.A_2 = -1*(self.x_local2_filtered[0] - x_L)/(self.y_local2_filtered[0] - y_L)
+			self.B_2 = self.y_local2_filtered[0] - self.A_2*self.x_local2_filtered[0]
 
 			# print(x_local2)
 			# print(x_local2_filtered)
@@ -197,12 +211,12 @@ class clover:
 
 			# Calculate the midpoints Z_bar
 			# Initialize an empty list to store the averaged values
-			x_bar = []
-			y_bar = []
-			Z_bar = []
+			self.x_bar = []
+			self.y_bar = []
+			self.Z_bar = []
 
 			# Calculate the number of elements in the array
-			n = len(x_local2_filtered)
+			n = len(self.x_local2_filtered)
 
 			# Calculate the number of pairs (assuming an even number of elements)
 			num_pairs = n // 2
@@ -214,32 +228,48 @@ class clover:
 				second_index = n - 1 - i
     
     		# Calculate the average of the pair and append it to x_bar
-				average_valuex = (x_local2_filtered[first_index] + x_local2_filtered[second_index]) / 2
-				average_valuey = (y_local2_filtered[first_index] + y_local2_filtered[second_index]) / 2
-				x_bar.append(average_valuex)
-				y_bar.append(average_valuey)
-				Z_bar.append([x_bar,y_bar])
+				average_valuex = (self.x_local2_filtered[first_index] + self.x_local2_filtered[second_index]) / 2
+				average_valuey = (self.y_local2_filtered[first_index] + self.y_local2_filtered[second_index]) / 2
+				self.x_bar.append(average_valuex)
+				self.y_bar.append(average_valuey)
+				self.Z_bar.append([self.x_bar,self.y_bar])
 
-			x_bar = x_bar[::-1] # reverse so we have the points 'closest together' (look at fig in paper) at the beginning of the array
-			y_bar = y_bar[::-1]	
-			Z_bar = Z_bar[::-1]
+			self.x_bar = self.x_bar[::-1] # reverse so we have the points 'closest together' (look at fig in paper) at the beginning of the array
+			self.y_bar = self.y_bar[::-1]	
+			self.Z_bar = self.Z_bar[::-1]
 			
-			column_1 = np.array(x_bar)
+			column_1 = np.array(self.x_bar)
 			column_2 = np.ones_like(column_1)
 
 			# set up to solve least squares problem with Cx = d where x = [A_3, B_3]
 			C = np.column_stack((column_1,column_2)) 
-			d = np.column_stack(np.array(y_bar)).T
+			d = np.column_stack(np.array(self.y_bar)).T
 			# solve the least squares problem
 			solution = np.linalg.lstsq(C, d, rcond=None)[0]
+			self.A_3 = solution[0]
+			self.B_3 = solution[1]
 			# print(x_local2)
-			print(x_local2_filtered)
-			print(x_bar)
-			print(C)
-			print(d)
-			print(solution) # Verify this some how, make sure there are many data points. plot the lines l_1, l_2 and l_3 in desmos to verify maybe. plot the points local_filtered and Z_bar and compare
+			# print(self.x_local2_filtered)
+			# print(self.x_bar)
+			# print(C)
+			# print(d)
+			# print(solution) # Verify this some how, make sure there are many data points. plot the lines l_1, l_2 and l_3 in desmos to verify maybe. plot the points local_filtered and Z_bar and compare
 			# maybe try plotting using matplot lib in here to verify shape and things. If the line l_3 matches up with center points and all looks good then move on...
+			# print([A_1,B_1])
+			# print([A_2,B_2])
 
+			xf.append(self.x_local2_filtered)
+			yf.append(self.y_local2_filtered)
+			A1.append(self.A_1)
+			B1.append(self.B_1)
+			LidarA1.append(-1/self.A_1)
+			LidarB1.append(0)
+			A2.append(self.A_2)
+			B2.append(self.B_2)
+			LidarA2.append(-1/self.A_2)
+			LidarB2.append(0)
+			A3.append(self.A_3)
+			B3.append(self.B_3)
 			
 
 #----------------attempting to use Z_bar and sectors------------------------------------------------------------------------------------------------
@@ -412,8 +442,7 @@ class clover:
 			#telem = get_telemetry(frame_id='map')
 			
 			# logging/debugging
-			#xf.append(telem.x)
-			#yf.append(telem.y)
+			
 			#evx.append(self.u-telem.vx)
 			#evy.append(self.v-telem.vy)
 			#eyaw.append(self.omega-telem.yaw)
@@ -440,59 +469,64 @@ if __name__ == '__main__':
 		q.main()
 		#print(xa)
 		#print(xf)
-		
+		x = np.linspace(-1.5,1.5,100)
+		# Calculate y values for lines
+		y1 = A1[0]*x + B1[0]
+		y_lidar1 = LidarA1[0]*x
+		y2 = A2[0]*x + B2[0]
+		y_lidar2 = LidarA2[0]*x
+		y3 = A3[0]*x + B3[0]
 		# Plot logged data for analyses and debugging
 		plt.figure(1)
-		plt.subplot(211)
-		plt.plot(xf,yf,'r',label='x-fol')
-		#plt.plot(xa,'b--',label='x-obs')
-		plt.fill(xa[0],ya[0],'k') # plot first reading
+		plt.scatter(xf,yf,color='r',label='lidar-data')
+		plt.plot(x,y1,'b--',label='l_1')
+		plt.plot(x,y_lidar1,'g',label='lidar1')
+		plt.plot(x,y2,'m--',label='l_2')
+		plt.plot(x,y_lidar2,'g',label='lidar2')
+		plt.plot(x,y3,'r',label='l_3')
 		plt.legend()
 		plt.grid(True)
+		plt.axis('equal')
+		plt.xlim(-1.5,1.5)
+		plt.ylim(0,3.5)
 		#plt.subplot(312)
 		#plt.plot(yf,'r',label='y-fol')
 		#plt.plot(ya,'b--',label='y-obs')
 		#plt.legend()
 		#plt.grid(True)
 		#plt.ylabel('Position [m]')
-		plt.subplot(212)
-		plt.plot(YawF,'b',label='yaw-F')
-		plt.plot(YawC,'g',label='yaw-C')
-		plt.legend()
-		plt.grid(True)
-		plt.ylabel('yaw [deg]')
-		plt.xlabel('Time [s]')
+		
 		
 		# Velocity plot
-		plt.figure(2)
-		plt.subplot(311)
-		plt.plot(velfx,'r',label='vx-vel')
-		plt.plot(velcx,'b',label='vx-com')
-		plt.ylabel('vel[m/s]')
-		plt.xlabel('Time [s]')
-		plt.legend()
-		plt.grid(True)
-		plt.subplot(312)
-		plt.plot(velfy,'r',label='vy-vel')
-		plt.plot(velcy,'b--',label='vy-com')
-		plt.legend()
-		plt.grid(True)
-		plt.ylabel('Position [m]')
-		plt.subplot(313)
-		plt.plot(evx,'r',label='evx')
-		plt.plot(evy,'b',label='evy')
-		plt.plot(eyaw,'g',label='eyaw')
-		plt.ylabel('Error[m]')
-		plt.xlabel('Time [s]')
-		plt.legend()
-		plt.grid(True)
+		# plt.figure(2)
+		# plt.subplot(311)
+		# plt.plot(velfx,'r',label='vx-vel')
+		# plt.plot(velcx,'b',label='vx-com')
+		# plt.ylabel('vel[m/s]')
+		# plt.xlabel('Time [s]')
+		# plt.legend()
+		# plt.grid(True)
+		# plt.subplot(312)
+		# plt.plot(velfy,'r',label='vy-vel')
+		# plt.plot(velcy,'b--',label='vy-com')
+		# plt.legend()
+		# plt.grid(True)
+		# plt.ylabel('Position [m]')
+		# plt.subplot(313)
+		# plt.plot(evx,'r',label='evx')
+		# plt.plot(evy,'b',label='evy')
+		# plt.plot(eyaw,'g',label='eyaw')
+		# plt.ylabel('Error[m]')
+		# plt.xlabel('Time [s]')
+		# plt.legend()
+		# plt.grid(True)
 
-		plt.figure(3)
-		for x_row, y_row in zip(xa, ya):
-			plt.plot(x_row,y_row, '-o',label=f'Reading {len(plt.gca().lines)}')
-			#plt.fill(xa,ya,'k')
-		plt.grid(True)
-		plt.legend()
+		# plt.figure(3)
+		# for x_row, y_row in zip(xa, ya):
+		# 	plt.plot(x_row,y_row, '-o',label=f'Reading {len(plt.gca().lines)}')
+		# 	#plt.fill(xa,ya,'k')
+		# plt.grid(True)
+		# plt.legend()
 		
 		# plt.figure(3)
 		# plt.plot(U_infx,'r',label='x_inf')
@@ -515,7 +549,7 @@ if __name__ == '__main__':
 		#plt.subplot(212)
 		#plt.plot(YawL,'b--',label='yaw')
 		
-		#plt.show()
+		plt.show()
 		
 	except rospy.ROSInterruptException:
 		pass
