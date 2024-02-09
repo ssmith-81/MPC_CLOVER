@@ -177,8 +177,6 @@ class clover:
 	
 	def lidar_read(self,data):
 
-		# Retrieve the current timestamp in seconds
-		current_timestamp = data.header.stamp.to_sec()
 
 		# Update the obstacle detect array
 		self.obs_detect = data.ranges
@@ -403,6 +401,9 @@ class clover:
 			# Extract the tranformed positions
 			readings_global2 = readings_global2[:2,:].T
 
+			# Retrieve the current timestamp in seconds
+			current_timestamp = data.header.stamp.to_sec()
+
 			# Calculate the obstacles position, velocity, and acceleration in the drones reference frame using the AHOSMO
 			if self.last_timestamp is not None:
 
@@ -411,8 +412,8 @@ class clover:
 				dt = current_timestamp - self.last_timestamp
 
 				# Temporary constant gains
-				L1 = 10
-				L2 = 20
+				L1 = 15
+				L2 = 25
 				L3 = 15
 
 				# Update the observer for the x-dynamic direction
@@ -432,7 +433,19 @@ class clover:
 				vy_obs.append(y2hat)
 				ay_obs.append(y3hat)
 
-			
+				# Update current values
+				self.x1hat_cur = x1hat
+				self.x2hat_cur = x2hat
+				self.x3hat_cur = x3hat
+
+				self.y1hat_cur = y1hat
+				self.y2hat_cur = y2hat
+				self.y3hat_cur = y3hat
+
+				
+
+			# update last_timestamp to current timestamp
+			self.last_timestamp = current_timestamp
 			
 			
 			
@@ -530,7 +543,7 @@ if __name__ == '__main__':
 		y3 = A3[0]*x + B3[0]
 		# Plot logged data for analyses and debugging
 		plt.figure(1)
-		plt.scatter(xf,yf,color='r',label='lidar-data')
+		# plt.scatter(xf,yf,color='r',label='lidar-data')
 		plt.plot(x,y1,'b--',label='l_1')
 		plt.plot(x,y_lidar1,'g',label='lidar1')
 		plt.plot(x,y2,'m--',label='l_2')
@@ -562,14 +575,20 @@ if __name__ == '__main__':
 		
 		# observer plot
 		plt.figure(2)
-		# plt.subplot(311)
-		plt.plot(cenx,ceny,'r',label='obs_center')
-		plt.plot(x_obs,y_obs,'b',label='obs_hat')
+		plt.subplot(211)
+		plt.plot(cenx,'r',label='obs_center')
+		plt.plot(x_obs,'b',linewidth = 2,linestyle='--',label='obs_hat')
 		plt.ylabel('pos[m]')
 		plt.xlabel('Time [s]')
 		plt.legend()
 		plt.grid(True)
-		# plt.subplot(312)
+		plt.subplot(212)
+		plt.plot(ceny,'r',label='obs_center')
+		plt.plot(y_obs,'b',linewidth = 2,linestyle='--',label='obs_hat')
+		plt.ylabel('pos[m]')
+		plt.xlabel('Time [s]')
+		plt.legend()
+		plt.grid(True)
 		# plt.plot(velfy,'r',label='vy-vel')
 		# plt.plot(velcy,'b--',label='vy-com')
 		# plt.legend()
