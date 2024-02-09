@@ -109,16 +109,15 @@ ya = []
 u_field = []
 v_field = []
 
-# Analyze control input (see if error is being minimized )
-velfx=[]
-velfy=[]
-velcx=[]
-velcy=[]
-U_infx = []
-V_infy=[]
-evx=[]
-evy=[]
-eyaw=[]
+# Analyze observer
+x_obs=[]
+vx_obs=[]
+ax_obs=[]
+
+y_obs=[]
+vy_obs=[]
+ay_obs=[]
+
 
 
 			
@@ -138,7 +137,7 @@ class clover:
 		self.last_timestamp = None # make sure there is a timestamp
 		
 		# Generate the array of lidar angles
-		self.lidar_angles = np.linspace(-45*(math.pi/180), 45*(math.pi/180), 32) # Adjust this number based on number defined in XACRO!!!!!
+		self.lidar_angles = np.linspace(-180*(math.pi/180), 180*(math.pi/180), 360) # Adjust this number based on number defined in XACRO!!!!!
 
 		# Initialize the ranges array for the controller as no object detected (i.e. an array of inf)
 		self.obs_detect = np.full_like(self.lidar_angles, np.inf)
@@ -156,6 +155,16 @@ class clover:
 		# the velocity field based on source/sink strengths
 		self.flag = False
 
+		# Define the observer variables
+		self.x1hat_cur = 0
+		self.x2hat_cur = 0
+		self.x3hat_cur = 0
+
+		self.y1hat_cur = 0
+		self.y2hat_cur = 0
+		self.y3hat_cur = 0
+
+
 		
 		
 
@@ -167,6 +176,9 @@ class clover:
 		return ((x-self.z_hatx)**2 / a**2) + ((y-self.z_haty)**2 / b**2) - 1
 	
 	def lidar_read(self,data):
+
+		# Retrieve the current timestamp in seconds
+		current_timestamp = data.header.stamp.to_sec()
 
 		# Update the obstacle detect array
 		self.obs_detect = data.ranges
@@ -197,12 +209,6 @@ class clover:
 			# Filter out the inf values in the data point arrays
 			valid_indices = np.isfinite(x_local2) & np.isfinite(y_local2)
 
-			# Check if the number of True values is even (use this if we are using Z for l3 not Z_bar):
-			if np.sum(valid_indices) % 2 != 0: # want to make sure we have pair data readings and not one without a pair
-    		# Find the index of the last True value
-				last_true_index = np.where(valid_indices)[0][-1]
-    		# Set the last True value to False
-				valid_indices[last_true_index] = False # disregard the last reading if there is not an even amount for even pairs
 			
 			# Filter x_local2, y_local2, and angles based on valid_indices
 			self.x_local2_filtered = x_local2[valid_indices]
@@ -352,7 +358,7 @@ class clover:
 			b_elipse.append(b_fit)
 			beta.append(theta)
 
-			print(b_elipse)
+
 			
 			xf.append(self.x_local2_filtered)
 			yf.append(self.y_local2_filtered)
@@ -377,99 +383,6 @@ class clover:
 			znormx.append(self.znorm_x)
 			znormy.append(self.znorm_y)
 
-
-			
-
-#----------------attempting to use Z_bar and sectors------------------------------------------------------------------------------------------------
-			
-	# 		# Divide Lidar range into nr intervals
-	# 		nr = 10
-			
-	# 		# Initialize variables to store sector measurements and midpoints
-	# 		sector_ranges = [[] for _ in range(nr)]
-	# 		sector_xy = [[] for _ in range(nr)] # initialize sector_xy as a list of empy lists
-	# 		sector_mean = [] 
-			
-
-	# 		# Iterate through LiDAR measurements and assign them to sectors
-	# 		for i, measurement in enumerate(ranges):
-	# 			if np.isfinite(measurement): # filter out invalid or inf measurements
-	# 				sector_index = int(i*nr/len(ranges))
-	# 				sector_ranges[sector_index].append(measurement)
-
-	# 				# Calculate x,y coordinates from measurements and angles (in the local Lidar ref frame 
-	# 				# where the y-axis is forward and the x-axis is pointing right)
-	# 				x_sec = measurement*np.sin(angles[i]) # select appropriate angle from angles array
-	# 				x_sec = np.multiply(x_sec,-1)
-	# 				y_sec = measurement*np.cos(angles[i])
-
-	# 				# Append [x, y] coordinates to sector_xy
-	# 				sector_xy[sector_index].append([x_sec,y_sec])
-			
-			
-
-
-	# 		# Average position per sector
-	# 		z_bar = []
-	# 		 # Calculate average x, and y for each sector for each sector
-	# 		for sector in sector_xy:
-	# 			# Convert sector to a numpy array
-	# 			sector_array = np.array(sector)
-
-	# 			# If sector has data, clculate [x_bar, y_bar], else set the mean to None
-	# 			if sector:
-	# 				# Calculate the x and y coordinates using np.mean along axis
-	# 				x_bar = np.mean(sector_array[:, 0]) # Calculate mean of x coordinate (column 0)
-	# 				y_bar = np.mean(sector_array[:, 1]) # Calculate mean of y coordinate
-	# 			else:
-	# 				x_bar, y_bar = None, None
-					
-	# 			z_bar.append([x_bar, y_bar]) # append [x_bar, y_bar] to z_bar
-
-	# 		##TODO everything before this is working in this section, everything after this is not working
-			
-	# 		# Find the range of sectors with data (so we will disregard sectors before and after obstacle)
-	# 		start_sector = None
-	# 		end_sector = None
-	# 		for i, z in enumerate(z_bar):
-	# 			if z is not None:
-	# 				if start_sector is None:
-	# 					start_sector = i # not sure this is i+1 and not i
-	# 				end_sector = i
-
-	# 		# # Ensure that the last sector with data is an even number (so we have paired sectors)
-	# 		# if end_sector is not None and end_sector % 2 != 0:
-	# 		# 	end_sector -= 1
-
-	# 		# Ensure that the total number of sectors with data is even
-	# 		if start_sector is not None and end_sector is not None and (end_sector - start_sector) % 2 == 0:
-	# 			end_sector -= 1
-
-	# 		# # Formulate z_bar_filter array that only includes values from sectors that have paired sector values 
-			
-	# 		# # Apply the algorithm considering only sectors with pairs of data
-	# 		# zbar_with_pairs = []
-	# 		# for i in range(start_sector, end_sector + 1, 2):
-	# 		# 	paired_index = (i + 1) if i % 2 == 0 else (i - 1)
-	# 		# 	if z_bar[i] is not None and z_bar[paired_index] is not None:
-	# 		# 		zbar_with_pairs.append(z_bar[i])
-	# 		# Apply the algorithm considering only sectors with pairs of data
-	# 		# Apply the algorithm considering only sectors with pairs of data
-	# 		zbar_with_pairs = []
-	# 		if start_sector is not None and end_sector is not None:
-    # # Iterate over the sectors, pairing each one with its corresponding one from the other end
-	# 			for i in range(start_sector, start_sector + (end_sector - start_sector + 1) // 2):
-	# 				paired_index = end_sector - (i - start_sector)
-	# 				if z_bar[i] is not None and z_bar[paired_index] is not None:
-	# 					zbar_with_pairs.append(z_bar[i])
-
-	# 		# print(sector_ranges)
-	# 		# print(sector_xy)
-	# 		# print(z_bar)
-	# 		# print(zbar_with_pairs)
-
-#---------------------------------------------------------------------------------------------------------------------------------------------------------
-
 			
 			
 			
@@ -489,6 +402,36 @@ class clover:
 			
 			# Extract the tranformed positions
 			readings_global2 = readings_global2[:2,:].T
+
+			# Calculate the obstacles position, velocity, and acceleration in the drones reference frame using the AHOSMO
+			if self.last_timestamp is not None:
+
+				# Calculate the change in time since the last time step (this is needed
+				# for euler integration within this funcion)
+				dt = current_timestamp - self.last_timestamp
+
+				# Temporary constant gains
+				L1 = 10
+				L2 = 20
+				L3 = 15
+
+				# Update the observer for the x-dynamic direction
+				x1hat = self.x1hat_cur + dt*(self.x2hat_cur + L1*(abs(center[0] - self.x1hat_cur)**(2/3))*np.sign(center[0]-self.x1hat_cur))
+				x2hat = self.x2hat_cur + dt*(self.x3hat_cur + L2*(abs(center[0] - self.x1hat_cur)**(1/3))*np.sign(center[0]-self.x1hat_cur))
+				x3hat = self.x3hat_cur + dt*(L3*np.sign(center[0]-self.x1hat_cur))
+
+				# Update the observer for the x-dynamic direction
+				y1hat = self.y1hat_cur + dt*(self.y2hat_cur + L1*(abs(center[1] - self.y1hat_cur)**(2/3))*np.sign(center[1]-self.y1hat_cur))
+				y2hat = self.y2hat_cur + dt*(self.y3hat_cur + L2*(abs(center[1] - self.y1hat_cur)**(1/3))*np.sign(center[1]-self.y1hat_cur))
+				y3hat = self.y3hat_cur + dt*(L3*np.sign(center[1]-self.y1hat_cur))
+
+				x_obs.append(x1hat)
+				vx_obs.append(x2hat)
+				ax_obs.append(x3hat)
+				y_obs.append(y1hat)
+				vy_obs.append(y2hat)
+				ay_obs.append(y3hat)
+
 			
 			
 			
@@ -542,7 +485,8 @@ class clover:
 		
 		
 		while not rospy.is_shutdown():
-			
+
+				
 			
 			
 			
@@ -602,11 +546,11 @@ if __name__ == '__main__':
 		plt.xlim(-1.5,1.5)
 		plt.ylim(0,3.5)
 		# create an ellipse patch
-		plt.figure(2)
+		# plt.figure(2)
 		ellipse = Ellipse(xy=(cenx[0],ceny[0]), width=2*a_elipse[0], height=2*b_elipse[0], angle=np.rad2deg(beta[0]),
 		edgecolor='b', fc='None', lw=2)
 		plt.gca().add_patch(ellipse)
-		plt.axis('equal')
+		# plt.axis('equal')
 	
 		#plt.subplot(312)
 		#plt.plot(yf,'r',label='y-fol')
@@ -616,15 +560,15 @@ if __name__ == '__main__':
 		#plt.ylabel('Position [m]')
 		
 		
-		# Velocity plot
-		# plt.figure(2)
+		# observer plot
+		plt.figure(2)
 		# plt.subplot(311)
-		# plt.plot(velfx,'r',label='vx-vel')
-		# plt.plot(velcx,'b',label='vx-com')
-		# plt.ylabel('vel[m/s]')
-		# plt.xlabel('Time [s]')
-		# plt.legend()
-		# plt.grid(True)
+		plt.plot(cenx,ceny,'r',label='obs_center')
+		plt.plot(x_obs,y_obs,'b',label='obs_hat')
+		plt.ylabel('pos[m]')
+		plt.xlabel('Time [s]')
+		plt.legend()
+		plt.grid(True)
 		# plt.subplot(312)
 		# plt.plot(velfy,'r',label='vy-vel')
 		# plt.plot(velcy,'b--',label='vy-com')
@@ -638,7 +582,7 @@ if __name__ == '__main__':
 		# plt.ylabel('Error[m]')
 		# plt.xlabel('Time [s]')
 		# plt.legend()
-		# plt.grid(True)
+		plt.grid(True)
 
 		# plt.figure(3)
 		# for x_row, y_row in zip(xa, ya):
