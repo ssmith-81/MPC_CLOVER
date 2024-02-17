@@ -1,16 +1,16 @@
 <?xml version="1.0" ?>
 <sdf version="1.5">
   <model name="Big box 2">
-    <pose>0 0 0.75  0 0 0</pose>
+    <pose>0 0 1.75  0 0 0</pose>
     <static>false</static>
     <link name="link">
       <inertial>
         <mass>40.0</mass>
         <inertia>
-          <ixx>1</ixx>
+          <ixx>1.5</ixx>
           <ixy>0</ixy>
           <ixz>0</ixz>
-          <iyy>1</iyy>
+          <iyy>1.5</iyy>
           <iyz>0</iyz>
           <izz>1</izz>
         </inertia>
@@ -18,10 +18,10 @@
 
       <collision name="collision">
         <geometry>
-         <!-- <box>
-              <size>1.20 0.80 1.50</size>
-          </box>-->
-          <cylinder radius="0.60" length="2.0"/>
+          <cylinder>
+            <radius>1.5</radius>
+            <length>3.5</length>
+          </cylinder>
         </geometry>
 	<surface>
           <contact>
@@ -34,14 +34,14 @@
       </collision>
       <visual name="visual">
         <geometry>
-          <!--<mesh>
-            <uri>model://big_box2/meshes/big_box.dae</uri>
-          </mesh>-->
-          <cylinder radius="0.60" length="2.0"/>
+        <cylinder>
+            <radius>1.5</radius>
+            <length>3.5</length>
+          </cylinder>
 	</geometry>
 	<material>
-	<ambient>0.5 0.0 0.5 1.0</ambient>
-	<diffuse>0.5 0.0 0.5 1.0</diffuse>
+	<ambient>1.0 0.0 0.0 1.0</ambient>
+	<diffuse>0.0 0.0 1.0 1.0</diffuse>
 	</material>
       </visual>
     </link>
