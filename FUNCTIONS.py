@@ -1,6 +1,6 @@
 from CLOVER_MODEL import export_clover_model
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver, AcadosSimSolver
-from casadi import vertcat, sum1, mtimes, Function
+from casadi import vertcat, sum1, mtimes, Function, norm_1, norm_2
 import numpy as np
 import scipy.linalg
 
@@ -43,8 +43,10 @@ def acados_settings(N_horizon, T_horizon):
 		# Cost matrices
 		# Q = np.array([ 10, 0, 10, 0, 10, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
 		# R = np.array([ 1e-4, 1e-4, 1e-4]) # Three control inputs acceleration
-		Q = np.array([ 1000, 0, 1500, 0, 1500, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
-		R = np.array([ 1e-5, 1e-1, 1e-1])
+		#Q = np.array([ 1000, 0, 1500, 0, 1500, 0]) # Assuming there are only 3 state outputs, State = [x, vx, y, vy, z, vz]
+		#Q = np.array([ 120, 80, 120, 80, 50, 20]) # 50-80
+		Q = np.array([ 0, 80, 0, 80, 0, 20])
+		R = np.array([ 5, 5, 5]) # 5 is goot
 		
 
 		ocp.cost.W_e = np.diag(Q)  # inputs are not decision variables at the end of prediction horizon
@@ -76,21 +78,92 @@ def acados_settings(N_horizon, T_horizon):
 
 		ocp.constraints.x0 = x_ref # initial state (not sure) translated internally to idxbx_0, lbx_0, ubx_0, idxbxe_0
 
+		# Initialize the state of the target obstacle (this will be overwritten later, just initializing it right now) -> sets the model.p values define in model defintion
+		ocp.parameter_values = np.array([0.0,0.0,0.0, 0.0, 0.0, 0.0]) # State = [x, vx, ax, y, vy, ay]
 
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp.AcadosOcpConstraints
         # constraints u = [ux,uy,uz] -> acceleration commands
-		u_lb = np.array([-1000, -10, -10])
-		u_ub = np.array([1000, 10, 10])
+		u_lb = np.array([-100, -100, -100])
+		u_ub = np.array([100, 100, 100])
 
 		ocp.constraints.constr_type = 'BGH'  # BGP is for convex over nonlinear.
 		ocp.constraints.lbu = u_lb
 		ocp.constraints.ubu = u_ub
 		ocp.constraints.idxbu = np.array([0, 1, 2]) # Constraints apply to u[0],u[1],u[2]
-        # Nonlinear in equality constraints
-        # ocp.constraints.lh = h_lb
-        # ocp.constraints.uh = h_ub
-        # ocp.constraints.lh_e = h_lb
-        # ocp.constraints.uh_e = h_ub
+        # Nonlinear inequality constraints using CBF
+		# gamma = 0.1
+		# x_obs = 2
+		# y_obs = 2
+		# r_obs = 1.0
+		# ocp.model.con_h_expr = 2*((model.x[0] - x_obs)*model.x[7] + (model.x[1]-y_obs)*model.x[8])  - gamma*((model.x[0]-x_obs)**2 + (model.x[1]-y_obs)**2 - r_obs**2)
+		# # ocp.model.con_h_expr = ((model.x[0]-x_obs)**2 + (model.x[1]-y_obs)**2 - r_obs**2) # Hard constraint avoidance
+		# h_lb = np.array([0])
+		# h_ub = np.array([10000])
+		# ocp.constraints.lh = h_lb
+		# ocp.constraints.uh = h_ub
+		# # Usage of slack variables to relax the above hard constraints
+		# ocp.constraints.Jsh = np.eye(1)
+		# # slacks
+		# L2_pen = 1e3 # 1e3
+		# L1_pen = 1  #1
+		# Nonlinear inequality constraints using CBF
+		# State = [x, vx,ax, y, vy, ay]
+		# Obstacle state
+		state = ocp.parameter_values
+		x_obs = state[0]
+		vx_obs = state[1]
+		ax_obs = state[2]
+		y_obs = state[3]
+		vy_obs = state[4]
+		ay_obs = state[5]
+
+		# Radius of obstacle to avoid
+		r = 2.8
+		# TODO Update obstacle states here
+		# State = x_obs, vx_obs, ax_obs, y_obs, vy_obs, ay_obs
+		q1 = 15#15
+		q2 = 10#10
+		delta_p = np.array([model.x[0]-model.p[0], model.x[2] - model.p[3]])
+		delta_v = np.array([model.x[1] - model.p[1], model.x[3] - model.p[4]])
+		delta_a = np.array([model.u[0]-model.p[2], model.u[1] - model.p[5]])
+
+
+
+		norm_delta_p = norm_2(delta_p)#np.linalg.norm(delta_p, ord=1)
+		norm_delta_v = norm_2(delta_v)#np.linalg.norm(delta_v, ord=1)
+
+		c_ol = (norm_delta_v**2)/norm_delta_p - ((np.dot(delta_p,delta_v))**2)/(norm_delta_p**3) + (q1+q2)*(np.dot(delta_p,delta_v))/norm_delta_p + q1*q2*(norm_delta_p - r)
+
+		ocp.model.con_h_expr = c_ol + np.dot(delta_p,delta_a)/norm_delta_p
+
+		# ocp.model.con_h_expr_e = c_ol + np.dot(delta_p,delta_a)/norm_delta_p
+
+		h_lb = np.array([0])
+		h_ub = np.array([100000])
+		ocp.constraints.lh = h_lb
+		ocp.constraints.uh = h_ub
+
+		# Usage of slack variables to relax the above hard constraints
+		ocp.constraints.Jsh = np.eye(1)
+		# # slacks
+		L2_pen = 1e4 # 1e3
+		L1_pen = 1e3  #1
+
+		ocp.cost.Zl = L2_pen*np.ones((1,)) # Diagonal of hessian WRT lower slack
+		ocp.cost.Zu = L2_pen*np.ones((1,))
+		ocp.cost.zl = L1_pen*np.ones((1,)) # Gradient with respect to lower slack at intermediate shooting nodes
+		ocp.cost.zu = L1_pen*np.ones((1,))
+		# ocp.constraints.lh_e = h_lb
+		# ocp.constraints.uh_e = h_ub
+
+		# Gradient indicates how changes in slack variables influence cost function. Higher gradient value implies stronger influence of the slack variables
+		# on the cost. It determines rate of change of the cost wrt to changes in alsack variables
+		# Hessians wrt slack variables measures the curvature of the cost function wrt to changes in slack variables, diagonals of hessian represent
+		# the second derivatives of the cost function wrt corresponding slack variables
+		# Higher hessian value indicates how rapidly the gradient of the cost function changes wrt slack variables
+
+		# Higher gradient and higher hessian increase penalty for violations of the lower or upper bounds of slack variables
+
 
         # Solver options
         # https://docs.acados.org/python_interface/index.html#acados_template.acados_ocp_options.AcadosOcpOptions

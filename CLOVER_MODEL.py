@@ -31,15 +31,26 @@ def export_clover_model():
 	
 	xdot = vertcat(vx, ax, vy, ay, vz, az) # Derivative of the state wrt time
 	
-	# Parameters (CasADi variable descibing parameters of the DAE; Default [].
-	# parameters
-	p = vertcat([])
 	
 	# Explicit dynamics x_dot = f_expl(x,u,p)
 	f_expl = vertcat(vx, ux, vy, uy, vz, uz)
 	
 	# implicit dynamics f_impl(xdot,x,u,z,p) = 0
 	f_impl = xdot - f_expl
+
+	# Set up the obstacle state parameters
+	x_obs = SX.sym('x_obs')
+	vx_obs = SX.sym('vx_obs')
+	ax_obs = SX.sym('ax_obs')
+	y_obs = SX.sym('y_obs')
+	vy_obs = SX.sym('vy_obs')
+	ay_obs = SX.sym('ay_obs')
+
+
+	# Parameters (CasADi variable descibing parameters of the DAE; Default [].
+	# parameters
+	p = vertcat(x_obs, vx_obs, ax_obs, y_obs, vy_obs, ay_obs) # Obstacle state
+	
 	
 	# define model
 	model = AcadosModel()
@@ -55,4 +66,3 @@ def export_clover_model():
 	
 
 	return model
-
