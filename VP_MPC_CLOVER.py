@@ -248,6 +248,8 @@ class clover:
             # update state
             # x_current = acados_integrator.get("x")
             # simX[i+1,:] = x_current
+            
+            k = k+1 # update the counter
 
     def update(self,frame):
         plt.cla()  # Clear the previous plot
